@@ -11,7 +11,10 @@
     <img alt="License: CC BY-NC-SA 4.0" src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-blue" />
   </p>
 </div>
-
+<div align="center">
+  <h1><b>SPANDA</b></h1>
+  <p><i>Pronounced "spun-duh"</i></p>
+</div>
 Spanda listens to the combined audio playing through the Windows default output and turns it into responsive visuals. Choose a scene and color palette, tune how strongly it reacts, and switch to full screen when you want the visuals to fill the display.
 
 Spanda is a visualizer, not a player or audio router. It does not change playback volume or select an output device. System audio capture starts only when you press **Start**.
