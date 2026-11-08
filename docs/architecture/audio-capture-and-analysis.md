@@ -51,3 +51,10 @@ The public three-band vector is `[subBass + kick, mids, treble]`, with the first
 The analysis worker updates the latest snapshot as blocks arrive and emits at most one `audio_frame` push event per roughly 16 ms (about 60 updates per second). Peak and transient are accumulated across blocks between pushes so short attacks are less likely to disappear between emitted frames. The Tauri `get_snapshot` command is a pull fallback and also retires a stale analysis snapshot after 250 ms without packets.
 
 `CaptureService` is source-independent above the Windows adapter: the analyzer consumes `AudioBlock`, and the UI receives `AnalysisFrame`/`CaptureSnapshot`. This boundary is where other capture adapters could be added later without passing WASAPI types into the DSP or renderer.
+
+
+## Opt-in recording tap
+
+While recording is active, `Publisher::block` also offers decoded blocks to `RecordingTap`. The tap has a separate bounded producer/consumer queue (256 packets and a 2 MiB queued-PCM limit) and uses nonblocking capture-side operations. It is inactive otherwise. The analysis worker/channel and compact `audio_frame` events remain unchanged.
+
+Recording serialization and file writes run outside the capture callback. Overflow is reported to recording as an error rather than allowing an unbounded audio backlog or waiting on disk. The tap is stopped and unfinished output is cleaned up during application shutdown. See [recording architecture](recording.md) for binary transport, encoding, and verification limits.

@@ -33,7 +33,7 @@ The client treats capture state and signal data separately. `idle`, `starting`, 
 
 ## UI and render responsibilities
 
-`App.tsx` owns the audio client and capture controls. React subscribes to state changes for the HUD and controls. The animation loop in `VisualEngine` reads the current `RenderAudio` directly once per frame and calls `activeScene.update(dt, audio, settings)`. The engine also handles resize, quality scaling, scene replacement, and disposal. This keeps per-frame scene updates outside React's render cycle.
+`App.tsx` owns the audio client and capture controls. React subscribes to state changes for the HUD and controls. The animation loop in `VisualEngine` reads the current `RenderAudio` directly once per frame and calls `activeScene.update(dt, audio, settings)`. The engine also handles resize, quality scaling, snapshot-based scene crossfades, scene replacement, and disposal. Recording frame subscribers run after the final visual frame is composed. This keeps per-frame scene updates outside React's render cycle.
 
 The selected response style and sensitivity are not backend DSP settings. They are renderer-side controls: scenes smooth and scale the already-produced analysis values for visual motion. Color palette is also a frontend setting. The Rust backend publishes features independently of the selected scene or palette.
 
@@ -44,3 +44,16 @@ The selected response style and sensitivity are not backend DSP settings. They a
 - `phase` and `bpm` are useful only when tracker confidence is sufficient; scenes can use immediate onset fallbacks while the tracker is not locked.
 - `waveform` contains 64 samples selected across a 4096-sample window. It is a downsampled display signal, not a lossless audio stream.
 - The renderer keeps ambient scene motion during silence, but it zeros audio-driven targets when `silent` is true.
+
+
+## Beat, treble, and preference consumers
+
+Constellation, Liquid Interference, Typography, and Kaleidoscope share `SceneBeatResponse`. It observes reported beat edges, confident phase wraps, and measured onset changes. It does not synthesize beats from a BPM timer. Sensitivity and Dynamics shape the visual envelope independently of backend DSP. See [scene mappings](scene-audio-response.md) for exact scene behavior.
+
+Kaleidoscope also combines the delivered treble band with upper-spectrum detail to reveal high-frequency attacks. A high-only frame can therefore drive shimmer/refraction without requiring a kick, bass hit, or beat flag.
+
+The settings store restores a validated, versioned local record of scene, palette, sensitivity, response, quality, and typography text once when the app initializes. Unknown scenes/enum values fall back safely, numeric limits are enforced, and storage failures leave session controls usable. Last compact-tab selection is stored separately. Capture, recording, and automatic rotation remain off on startup.
+
+## Recording is a separate opt-in path
+
+Analysis events carry compact features, not lossless audio. Recording attaches a bounded PCM tap to active capture and pulls binary packets through separate commands only while recording. It combines that audio with the clean renderer canvas; it does not reconstruct audio from analysis bands or replace the analysis event stream. See [recording architecture](recording.md).
