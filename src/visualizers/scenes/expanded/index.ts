@@ -1,3 +1,4 @@
+import { createConstellationGlowMaterial, frontNodeWeight, nodeTwinkle } from './constellation-glow';
 import { SceneBeatResponse } from '../../beat-response';
 import * as THREE from 'three';
 import { PALETTES } from '../../palettes';
@@ -136,6 +137,15 @@ export class ParticleConstellationScene implements VisualScene {
   readonly colors = new Float32Array(MAX_NODES * 4);
   private linkColors = new Float32Array(MAX_CONNECTIONS * 8);
   private opacity = Float32Array.from({ length: MAX_NODES }, (_, i) => i < COUNT ? 1 : 0);
+  readonly nodeGlow = new Float32Array(MAX_NODES);
+  readonly frontGlow = new Float32Array(MAX_NODES);
+  readonly twinkles = new Float32Array(MAX_NODES);
+  readonly glowMaterial = createConstellationGlowMaterial();
+  private nodes: THREE.Points;
+  private worldCenter = new THREE.Vector3();
+  private towardCamera = new THREE.Vector3();
+  private nodeDirection = new THREE.Vector3();
+  private glowViewport = new THREE.Vector2();
   private growth = 0;
   readonly rhythm = new SceneBeatResponse();
   readonly geometry = new THREE.BufferGeometry();
@@ -148,14 +158,23 @@ export class ParticleConstellationScene implements VisualScene {
   private pulse = 0;
   constructor() {
     this.scene.background = new THREE.Color(0);
-    this.camera.position.z = 8;
+    this.camera.position.z = 7.4;
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
     this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 4).setUsage(THREE.DynamicDrawUsage));
+    this.geometry.setAttribute('beatGlow', new THREE.BufferAttribute(this.nodeGlow, 1).setUsage(THREE.DynamicDrawUsage));
+    this.geometry.setAttribute('frontGlow', new THREE.BufferAttribute(this.frontGlow, 1).setUsage(THREE.DynamicDrawUsage));
+    this.geometry.setAttribute('twinkle', new THREE.BufferAttribute(this.twinkles, 1).setUsage(THREE.DynamicDrawUsage));
     this.links.setAttribute('position', new THREE.BufferAttribute(this.linkPositions, 3).setUsage(THREE.DynamicDrawUsage));
     this.links.setAttribute('color', new THREE.BufferAttribute(this.linkColors, 4).setUsage(THREE.DynamicDrawUsage));
     this.geometry.setDrawRange(0, COUNT);
     this.links.setDrawRange(0, 0);
-    this.scene.add(new THREE.Points(this.geometry, this.material), new THREE.LineSegments(this.links, this.linkMaterial));
+    this.nodes = new THREE.Points(this.geometry, this.material);
+    const glow = new THREE.Points(this.geometry, this.glowMaterial);
+    glow.frustumCulled = false;
+    glow.onBeforeRender = renderer => {
+      this.glowMaterial.uniforms.uScale.value = renderer.getDrawingBufferSize(this.glowViewport).y * .5;
+    };
+    this.scene.add(this.nodes, new THREE.LineSegments(this.links, this.linkMaterial), glow);
   }
   update(dt: number, audio: RenderAudio, settings: VisualSettings) {
     const step = Math.min(.1, Math.max(0, dt));
@@ -191,6 +210,19 @@ export class ParticleConstellationScene implements VisualScene {
       this.colors[i * 4 + 2] = from.b + (to.b - from.b) * mix;
       this.colors[i * 4 + 3] = this.opacity[i];
     }
+    this.nodes.updateWorldMatrix(true, false);
+    this.nodes.getWorldPosition(this.worldCenter);
+    this.camera.getWorldPosition(this.towardCamera).sub(this.worldCenter).normalize();
+    for (let i = 0; i < activeCount; i++) {
+      this.nodeDirection.fromArray(this.positions, i * 3).applyMatrix4(this.nodes.matrixWorld)
+        .sub(this.worldCenter).normalize();
+      this.frontGlow[i] = frontNodeWeight(this.nodeDirection.dot(this.towardCamera));
+      this.nodeGlow[i] = beat * this.frontGlow[i];
+      this.twinkles[i] = nodeTwinkle(this.time, i);
+    }
+    this.geometry.attributes.beatGlow.needsUpdate = true;
+    this.geometry.attributes.frontGlow.needsUpdate = true;
+    this.geometry.attributes.twinkle.needsUpdate = true;
     let count = 0;
     const distance = .85 + this.energy * .5;
     const limit = Math.min(MAX_CONNECTIONS, CONNECTIONS + (activeCount - COUNT) * 3);
@@ -218,11 +250,11 @@ export class ParticleConstellationScene implements VisualScene {
     this.links.setDrawRange(0, count * 2);
     this.geometry.attributes.position.needsUpdate = true; this.links.attributes.position.needsUpdate = true;
     this.geometry.attributes.color.needsUpdate = true; this.links.attributes.color.needsUpdate = true;
-    this.material.size = .035 + this.energy * .025 + this.pulse * .04 + beat * .008;
-    this.linkMaterial.opacity = .14 + this.energy * .17 + beat * .1;
+    this.material.size = .035 + this.energy * .025 + this.pulse * .04;
+    this.linkMaterial.opacity = .14 + this.energy * .17;
   }
-  resize(width: number, height: number) { this.camera.aspect = width / Math.max(1, height); this.camera.position.z = this.camera.aspect < 1 ? 8 / Math.max(.35, this.camera.aspect) : 8; this.camera.updateProjectionMatrix(); }
-  dispose() { this.geometry.dispose(); this.links.dispose(); this.material.dispose(); this.linkMaterial.dispose(); this.scene.clear(); }
+  resize(width: number, height: number) { this.glowMaterial.uniforms.uScale.value = Math.max(1, height) * .5; this.camera.aspect = width / Math.max(1, height); this.camera.position.z = this.camera.aspect < 1 ? 7.4 / Math.max(.35, this.camera.aspect) : 7.4; this.camera.updateProjectionMatrix(); }
+  dispose() { this.geometry.dispose(); this.links.dispose(); this.material.dispose(); this.linkMaterial.dispose(); this.glowMaterial.dispose(); this.scene.clear(); }
 }
 
 

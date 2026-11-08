@@ -58,6 +58,8 @@ Slow radial displacement moves neighboring nodes inward and outward. The shared 
 
 Density grows by 0.2 node per rendered second and 0.4 per detected accent, up to 256 nodes. Existing points keep their identities and coordinates as density grows. New points use additional low-discrepancy directions, and their RGBA opacity eases in; new connections inherit endpoint opacity. Original links receive priority before added links. Point and link buffers are preallocated, with at most 768 edges. Density resets on scene recreation; it is not a saved setting. Time-based growth during silence is ambient behavior, not a claimed beat.
 
+Front-facing nodes twinkle at staggered, deterministic phases with smooth brightening and fading; beats amplify those sparkles. Compact cores and subtle star rays replace broad halos and sustained haze. Depth weighting fades the effect to zero toward the rear hemisphere, while palette colors and growth opacity remain shared with the original nodes. The camera is slightly closer (7.4 instead of 8) for modestly larger framing, including the existing portrait adjustment. Mesh lines receive no extra beat-brightness boost; geometry, density growth and slow reshaping remain unchanged.
+
 ## Liquid Interference
 
 Three moving ripple sources respond independently to bass, mids, and treble. Active audio increases the integrated flow rate; mild domain distortion gives the pattern more movement. Beat age drives an outward ring, while the shared envelope controls its visibility and a small geometric expansion. Palette colors follow interference intensity. Silence leaves gentle source movement without new beat rings.

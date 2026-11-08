@@ -1,3 +1,4 @@
+import { frontNodeWeight, nodeTwinkle } from './constellation-glow';
 import { createAudioStore } from '../../../audio/store';
 import { defaultAnalysisFrame } from '../../../audio/types';
 import * as THREE from 'three';
@@ -57,8 +58,8 @@ it('drives kaleidoscope symmetry with bounded band controls and releases resourc
 it('starts with the original 128-point appearance and only adds slow radial reshaping', () => {
   const scene = new ParticleConstellationScene(), quiet = createEmptyRenderAudio();
   scene.update(0, quiet, defaultSettings);
-  expect(scene.camera.position.z).toBe(8);
-  expect(scene.scene.children).toHaveLength(2);
+  expect(scene.camera.position.z).toBe(7.4);
+  expect(scene.scene.children).toHaveLength(3);
   expect(scene.scene.children.every(object => object instanceof THREE.Points || object instanceof THREE.LineSegments)).toBe(true);
   for (let i = 0; i < 128; i++) {
     const angle = i * 2.399963, y = 1 - 2 * (i + .5) / 128;
@@ -189,5 +190,101 @@ it('receives isolated high-band energy through the native analysis store', () =>
   scene.update(.016, store.readAudio(1000), defaultSettings);
   expect(scene.material.uniforms.uHigh.value).toBeGreaterThan(.3);
   expect(scene.material.uniforms.uBass.value).toBe(0); expect(scene.rhythm.pulse).toBe(0);
+  scene.dispose();
+});
+
+
+it('lights only camera-facing nodes on a beat while preserving palette and mesh brightness', () => {
+  const scene = new ParticleConstellationScene(), quiet = createEmptyRenderAudio();
+  scene.resize(1280, 720);
+  scene.update(0, quiet, defaultSettings);
+  expect(scene.nodeGlow.every(value => value === 0)).toBe(true);
+  const buffer = scene.nodeGlow;
+  scene.update(1 / 60, { ...quiet, silent: false, rms: .1, beat: true }, defaultSettings);
+  expect(scene.rhythm.pulse).toBeGreaterThan(.4);
+  let front = 0, rear = 0, partial = 0;
+  for (let i = 0; i < 128; i++) {
+    const x = scene.positions[i * 3], y = scene.positions[i * 3 + 1], z = scene.positions[i * 3 + 2];
+    const facing = z / Math.hypot(x, y, z);
+    expect(scene.nodeGlow[i]).toBeCloseTo(scene.rhythm.pulse * frontNodeWeight(facing), 6);
+    if (facing <= 0) { rear++; expect(scene.nodeGlow[i]).toBe(0); }
+    if (facing >= .7) { front++; expect(scene.nodeGlow[i]).toBeCloseTo(scene.rhythm.pulse, 6); }
+    if (facing > .15 && facing < .7) partial++;
+    expect(scene.colors[i * 4 + 3]).toBe(1);
+  }
+  expect(front).toBeGreaterThan(10); expect(rear).toBeGreaterThan(40); expect(partial).toBeGreaterThan(10);
+  expect(scene.material.size).toBe(.035);
+  expect(scene.linkMaterial.opacity).toBe(.14);
+  expect(scene.nodeGlow).toBe(buffer);
+  const core = scene.scene.children[0] as THREE.Points;
+  const halo = scene.scene.children[2] as THREE.Points;
+  expect(halo.geometry).toBe(core.geometry);
+  expect(scene.glowMaterial.blending).toBe(THREE.AdditiveBlending);
+  expect(scene.glowMaterial.depthWrite).toBe(false);
+  // Growth opacity and palette tint are shared with the original points, including the halo.
+  expect(scene.glowMaterial.fragmentShader).toContain('vTint.rgb');
+  expect(scene.glowMaterial.fragmentShader).toContain('vTint.a');
+  scene.dispose();
+});
+
+it('moves the illuminated cap with the camera and releases beat glow in silence', () => {
+  const scene = new ParticleConstellationScene(), quiet = createEmptyRenderAudio();
+  scene.update(1 / 60, { ...quiet, silent: false, rms: .1, beat: true }, defaultSettings);
+  const before = scene.nodeGlow.slice();
+  scene.camera.position.set(0, 0, -8); scene.camera.lookAt(0, 0, 0);
+  scene.update(0, { ...quiet, silent: false, beat: true }, defaultSettings);
+  let newlyLit = 0;
+  for (let i = 0; i < 128; i++) {
+    if (before[i] > 0) expect(scene.nodeGlow[i]).toBe(0);
+    if (scene.nodeGlow[i] > 0) { expect(before[i]).toBe(0); newlyLit++; }
+  }
+  expect(newlyLit).toBeGreaterThan(20);
+  for (let i = 0; i < 240; i++) scene.update(1 / 60, { ...quiet, beat: true, transient: 1 }, defaultSettings);
+  expect(scene.nodeGlow.every(value => value === 0)).toBe(true);
+  expect(scene.nodeGlow.every(Number.isFinite)).toBe(true);
+  const dispose = vi.spyOn(scene.glowMaterial, 'dispose');
+  scene.dispose(); expect(dispose).toHaveBeenCalledOnce();
+});
+
+it('blends front depth continuously instead of switching nodes abruptly', () => {
+  expect(frontNodeWeight(-1)).toBe(0);
+  expect(frontNodeWeight(.15)).toBe(0);
+  expect(frontNodeWeight(.7)).toBe(1);
+  expect(frontNodeWeight(1)).toBe(1);
+  expect(frontNodeWeight(.425)).toBeCloseTo(.5);
+  let previous = 0;
+  for (let facing = -.99; facing <= 1; facing += .01) {
+    const weight = frontNodeWeight(facing);
+    expect(weight).toBeGreaterThanOrEqual(previous);
+    expect(weight - previous).toBeLessThan(.03);
+    previous = weight;
+  }
+});
+
+
+it('staggers smooth node twinkles and modestly enlarges the framing', () => {
+  const scene = new ParticleConstellationScene(), quiet = createEmptyRenderAudio();
+  scene.resize(1920, 1080); scene.update(0, quiet, defaultSettings);
+  expect(scene.camera.position.z).toBe(7.4);
+  expect(scene.camera.fov).toBe(55);
+  expect(scene.geometry.drawRange.count).toBe(128);
+  const buffer = scene.twinkles;
+  const initial = scene.twinkles.slice(0, 128);
+  expect(initial.filter(value => value > .8).length).toBeGreaterThan(5);
+  expect(initial.filter(value => value < .05).length).toBeGreaterThan(40);
+  let largestStep = 0;
+  for (let i = 0; i < 128; i++) {
+    const now = nodeTwinkle(0, i), next = nodeTwinkle(1 / 60, i);
+    expect(now).toBeGreaterThanOrEqual(0); expect(now).toBeLessThanOrEqual(1);
+    largestStep = Math.max(largestStep, Math.abs(next - now));
+  }
+  expect(largestStep).toBeLessThan(.06);
+  scene.update(.1, quiet, defaultSettings);
+  expect(scene.twinkles).toBe(buffer);
+  expect(scene.twinkles.slice(0, 128)).not.toEqual(initial);
+  expect(scene.nodeGlow.every(value => value === 0)).toBe(true);
+  scene.resize(360, 800);
+  expect(scene.camera.position.z).toBeCloseTo(7.4 / (360 / 800));
+  expect(scene.twinkles.every(Number.isFinite)).toBe(true);
   scene.dispose();
 });
