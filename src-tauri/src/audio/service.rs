@@ -45,6 +45,7 @@ pub struct Publisher {
     latest: Arc<Mutex<Latest>>,
     generation: u32,
     analysis_tx: SyncSender<AudioBlock>,
+    recording: Arc<crate::recording::RecordingTap>,
     dropped_flag: Arc<AtomicBool>,
 }
 
@@ -76,6 +77,7 @@ impl Publisher {
     }
 
     pub fn block(&self, block: &AudioBlock) {
+        self.recording.push(block);
         let mut block_to_send = block.clone();
         if self.dropped_flag.swap(false, Ordering::AcqRel) {
             block_to_send.discontinuity = true;
@@ -96,6 +98,7 @@ pub struct CaptureService {
     owner: Mutex<Owner>,
     latest: Arc<Mutex<Latest>>,
     factory: Box<Factory>,
+    pub recording: Arc<crate::recording::RecordingTap>,
     emitter: Arc<Mutex<Option<FrameEmitter>>>,
 }
 
@@ -111,6 +114,7 @@ impl CaptureService {
             owner: Mutex::new(Owner::default()),
             latest: Arc::new(Mutex::new(Latest::default())),
             factory: Box::new(factory),
+            recording: Arc::default(),
             emitter: Arc::new(Mutex::new(None)),
         }
     }
@@ -164,6 +168,7 @@ impl CaptureService {
             latest: self.latest.clone(),
             generation,
             analysis_tx,
+            recording: self.recording.clone(),
             dropped_flag,
         };
 
@@ -518,6 +523,7 @@ mod tests {
             latest: s.latest.clone(),
             generation: 1,
             analysis_tx: tx,
+            recording: Arc::default(),
             dropped_flag: Arc::new(AtomicBool::new(false)),
         };
         s.stop().unwrap();
@@ -600,6 +606,7 @@ mod tests {
             latest: Arc::new(Mutex::new(Latest::default())),
             generation: 1,
             analysis_tx: tx,
+            recording: Arc::default(),
             dropped_flag: dropped.clone(),
         };
 

@@ -1,6 +1,7 @@
 pub mod audio;
 mod commands;
 mod media;
+mod recording;
 
 /// Read-only diagnostic for validating desktop media discovery in release builds.
 pub fn spotify_diagnostics() -> String {
@@ -38,9 +39,14 @@ fn begin_shutdown(app: &tauri::AppHandle) {
         return;
     }
     let service = app.state::<Arc<CaptureService>>().inner().clone();
+    let recording = app
+        .state::<Arc<recording::RecordingService>>()
+        .inner()
+        .clone();
     let media = app.state::<Arc<media::MediaService>>().inner().clone();
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        recording.abort();
         let _ = service.shutdown();
         media.shutdown();
         shutdown.finished.store(true, Ordering::Release);
@@ -51,16 +57,23 @@ fn begin_shutdown(app: &tauri::AppHandle) {
 pub fn run() {
     let service = Arc::new(CaptureService::new());
     let service_clone = service.clone();
+    let recording = Arc::new(recording::RecordingService::new(service.recording.clone()));
 
     tauri::Builder::default()
         .manage(service)
+        .manage(recording)
         .manage(Arc::new(Shutdown::default()))
         .invoke_handler(tauri::generate_handler![
             commands::start_capture,
             commands::stop_capture,
             commands::get_snapshot,
             media::get_spotify_state,
-            media::control_spotify
+            media::control_spotify,
+            recording::begin_recording,
+            recording::read_recording_audio,
+            recording::append_recording_chunk,
+            recording::finish_recording,
+            recording::cancel_recording
         ])
         .setup(move |app| {
             use tauri::Emitter;
