@@ -60,6 +60,12 @@ abstract class SurfaceScene implements VisualScene {
 export class LiquidInterferenceScene extends SurfaceScene {
   constructor() {
     super(`
+      vec3 ringTint(float phase, float offset){
+        float band=mod(floor((phase+1.5707963)/6.2831853)+offset,3.);
+        if(band<1.) return uA;
+        if(band<2.) return uB;
+        return uC;
+      }
       void main(){
         vec2 p=(vUv-.5)*vec2(uAspect,1.)*3.;
         p+=sin(p.yx*3.+uFlowTime*.6)*(.025+uMid*.035);
@@ -67,14 +73,23 @@ export class LiquidInterferenceScene extends SurfaceScene {
         vec2 a=vec2(sin(uFlowTime*.27),cos(uFlowTime*.22))*.65;
         vec2 b=vec2(cos(uFlowTime*.18),sin(uFlowTime*.29))*.7;
         vec2 c=vec2(sin(uFlowTime*.24+.8),cos(uFlowTime*.16+1.))* .8;
-        float wave=sin(length(p-a)*(12.+uBass*8.)-uFlowTime*1.5)*.45;
-        wave+=sin(length(p-b)*(16.+uMid*8.)-uFlowTime*1.3)*.35;
-        wave+=sin(length(p-c)*(22.+uTreble*10.)-uFlowTime*1.05)*.2;
+        float phaseA=length(p-a)*(12.+uBass*8.)-uFlowTime*1.5;
+        float phaseB=length(p-b)*(16.+uMid*8.)-uFlowTime*1.3;
+        float phaseC=length(p-c)*(22.+uTreble*10.)-uFlowTime*1.05;
+        vec3 waves=sin(vec3(phaseA,phaseB,phaseC));
+        float wave=dot(waves,vec3(.45,.35,.2));
+        vec3 rings=pow(.5+.5*waves,vec3(5.))*vec3(.45,.35,.2);
+        vec3 tintA=ringTint(phaseA,0.);
+        vec3 tintB=ringTint(phaseB,1.);
+        vec3 tintC=ringTint(phaseC,2.);
+        vec3 ringColor=(tintA*rings.x+tintB*rings.y+tintC*rings.z)
+          /max(.0001,rings.x+rings.y+rings.z);
         float ridge=pow(.5+.5*wave,3.);
         float beatRing=exp(-abs(length(p-a)-uBeatAge*2.8)*8.)*uBeat;
-        float light=.16+ridge*(.65+uBass*.4)+uPulse*.12+beatRing*.28;
+        float light=.16+ridge*(.65+uBass*.4)+uPulse*.12;
         float edge=1.-smoothstep(.3,2.2,length(p));
-        gl_FragColor=vec4(palette(.5+.5*wave)*light*(.25+.75*edge),1.);
+        vec3 color=ringColor*light+beatRing*ringTint(uFlowTime*1.5,0.)*.28;
+        gl_FragColor=vec4(color*(.25+.75*edge),1.);
       }`);
   }
 }

@@ -62,7 +62,7 @@ Front-facing nodes twinkle at staggered, deterministic phases with smooth bright
 
 ## Liquid Interference
 
-Three moving ripple sources respond independently to bass, mids, and treble. Active audio increases the integrated flow rate; mild domain distortion gives the pattern more movement. Beat age drives an outward ring, while the shared envelope controls its visibility and a small geometric expansion. Palette colors follow interference intensity. Silence leaves gentle source movement without new beat rings.
+Three moving ripple sources respond independently to bass, mids, and treble. Active audio increases the integrated flow rate; mild domain distortion gives the pattern more movement. Beat age drives an outward ring, while the shared envelope controls its visibility and a small geometric expansion. Successive rings cycle through all three palette anchors. The three ripple sources have staggered color offsets; their colored ridges blend at intersections, and the outward beat ring also uses a palette anchor. Silence leaves gentle source movement without new beat rings.
 
 ## Typography
 
