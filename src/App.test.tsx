@@ -1,8 +1,10 @@
+import { VISUAL_SETTINGS_KEY } from './experience/settings';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { expect, test, vi } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
 import App from './App';
 import type { Invoke } from './audio/types';
 
+beforeEach(() => localStorage.removeItem(VISUAL_SETTINGS_KEY));
 
 test('starts idle with Start available and Stop disabled', () => {
   const invoke: Invoke = () => new Promise(() => {});
@@ -314,4 +316,15 @@ test('deliberate keyboard navigation still operates the scene menu', () => {
   expect(screen.getByTestId('scene-select')).toHaveValue('tunnel');
   fireEvent.keyDown(trigger, { key: 'Escape' });
   expect(trigger).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('restores visual choices on reopening without starting capture', () => {
+  localStorage.setItem(VISUAL_SETTINGS_KEY, JSON.stringify({ version: 1, settings: { sceneId: 'kaleidoscope', palette: 'cosmic', sensitivity: 1.4 } }));
+  const invoke = vi.fn<Invoke>(() => new Promise(() => {}));
+  const ui = render(<App invoke={invoke} />);
+  expect(screen.getByLabelText('Scene selector')).toHaveValue('kaleidoscope');
+  expect(screen.getByRole('slider', { name: 'Sensitivity' })).toHaveAttribute('aria-valuenow', '1.4');
+  expect(screen.getByRole('button', { name: 'Palette Cosmic' })).toHaveAttribute('aria-pressed', 'true');
+  expect(invoke.mock.calls.some(([command]) => command === 'start_capture')).toBe(false);
+  ui.unmount();
 });

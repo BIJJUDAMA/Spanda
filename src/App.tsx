@@ -33,10 +33,10 @@ export default function App({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<VisualEngine | null>(null);
-  const settingsStore = useRef(createSettingsStore());
+  const [settingsStore] = useState(() => createSettingsStore());
 
   const [view, setView] = useState<AudioView>(idleView);
-  const [settings, setSettings] = useState<ExperienceSettings>(settingsStore.current.get());
+  const [settings, setSettings] = useState<ExperienceSettings>(settingsStore.get());
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [focusWithin, setFocusWithin] = useState<boolean>(false);
@@ -91,8 +91,8 @@ export default function App({
   }, [recordInteraction]);
 
   const updateSettings = useCallback((partial: Partial<ExperienceSettings>) => {
-    settingsStore.current.set(partial);
-    const updated = settingsStore.current.get();
+    settingsStore.set(partial);
+    const updated = settingsStore.get();
     setSettings(updated);
     if (partial.sceneId && engineRef.current) {
       engineRef.current.setScene(partial.sceneId);
@@ -140,7 +140,7 @@ export default function App({
       }
 
       if (e.key === 'ArrowRight') {
-        const currentSettings = settingsStore.current.get();
+        const currentSettings = settingsStore.get();
         const currentIndex = SCENE_OPTIONS.findIndex((s) => s.value === currentSettings.sceneId);
         const nextIndex = (currentIndex + 1) % SCENE_OPTIONS.length;
         updateSettings({ sceneId: SCENE_OPTIONS[nextIndex].value });
@@ -148,7 +148,7 @@ export default function App({
       }
 
       if (e.key === 'ArrowLeft') {
-        const currentSettings = settingsStore.current.get();
+        const currentSettings = settingsStore.get();
         const currentIndex = SCENE_OPTIONS.findIndex((s) => s.value === currentSettings.sceneId);
         const prevIndex = (currentIndex - 1 + SCENE_OPTIONS.length) % SCENE_OPTIONS.length;
         updateSettings({ sceneId: SCENE_OPTIONS[prevIndex].value });
@@ -157,7 +157,7 @@ export default function App({
 
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
-        const currentSettings = settingsStore.current.get();
+        const currentSettings = settingsStore.get();
         const currentIndex = PALETTE_OPTIONS.findIndex((p) => p.value === currentSettings.palette);
         const direction = e.key === 'ArrowUp' ? 1 : -1;
         const nextIndex = (currentIndex + direction + PALETTE_OPTIONS.length) % PALETTE_OPTIONS.length;
@@ -242,8 +242,8 @@ export default function App({
         const engine = new VisualEngine({
           container: containerRef.current,
           readAudio: (nowMs) => audio.readAudio(nowMs),
-          getSettings: () => settingsStore.current.get(),
-          sceneId: settingsStore.current.get().sceneId,
+          getSettings: () => settingsStore.get(),
+          sceneId: settingsStore.get().sceneId,
         });
         engine.start();
         engineRef.current = engine;
