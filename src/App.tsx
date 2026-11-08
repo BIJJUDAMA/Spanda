@@ -9,6 +9,7 @@ import {
   type Invoke,
   type Listen,
 } from './audio/types';
+import { SpotifyPlayer } from './components/SpotifyPlayer';
 import { CaptureControls } from './CaptureControls';
 import {
   ExperienceControls,
@@ -363,6 +364,7 @@ export default function App({
               view={view}
               client={client.current}
             />
+            <SpotifyPlayer invoke={invoke} listen={listen} />
             <ExperienceControls
               settings={settings}
               onUpdate={updateSettings}

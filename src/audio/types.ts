@@ -107,7 +107,7 @@ export const idleView: AudioView = {
   sourceName: undefined,
 };
 
-export type Invoke = (command: string) => Promise<unknown>;
+export type Invoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
 export type EventUnlisten = () => void;
 export type EventListener<T> = (event: { payload: T }) => void;
