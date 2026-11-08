@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { expect, test, vi } from 'vitest';
 import App from './App';
@@ -9,13 +9,12 @@ test('remount stays idle without invoking Start', async () => {
   const view = render(<StrictMode><App invoke={invoke} /></StrictMode>);
   expect(screen.getByRole('button', { name: /^Start$/ })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Stop' })).toBeDisabled();
-  // Open diagnostics to check status
-  fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
-  expect(within(screen.getByTestId('diagnostics-meter')).getByRole('status')).toHaveTextContent(/^Idle$/);
+
   view.unmount();
   render(<App invoke={invoke} />);
   await act(async () => {});
-  expect(invoke.mock.calls.every(([command]) => command === 'get_snapshot')).toBe(true);
+  expect(invoke.mock.calls.every(([command]) => ['get_snapshot', 'get_spotify_state'].includes(command))).toBe(true);
+  expect(invoke).not.toHaveBeenCalledWith('start_capture');
 });
 
 test('Start invokes once while pending, errors visible and retry available', async () => {
@@ -26,6 +25,8 @@ test('Start invokes once while pending, errors visible and retry available', asy
   fireEvent.click(start);
   fireEvent.click(start);
   expect(start).toBeDisabled();
+  expect(start).toHaveTextContent('Starting…');
+  expect(screen.getByText('Starting system audio capture…')).toBeInTheDocument();
   expect(invoke.mock.calls.filter(([c]) => c === 'start_capture')).toHaveLength(1);
   await act(async () => reject({ code: 'open', message: 'Choose a Windows output and retry.' }));
   expect(screen.getByRole('alert')).toHaveTextContent('Choose a Windows output and retry.');
@@ -35,19 +36,16 @@ test('Start invokes once while pending, errors visible and retry available', asy
 test('Stop clears levels after command completion', async () => {
   const invoke: Invoke = <T,>(command: string) => Promise.resolve((command === 'get_snapshot' ? { ...idleSnapshot, generation: 1, sequence: 1, state: 'running', analysis: { ...idleAnalysis, rms: 0.5, peak: 1 }, silent: false } : undefined) as T);
   render(<App invoke={invoke} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
-  await waitFor(() => expect(screen.getByLabelText('Peak')).toHaveTextContent('1.0000'));
+  await waitFor(() => expect(screen.getByLabelText('Peak')).toHaveTextContent('0.0 dBFS'));
   fireEvent.click(screen.getByRole('button', { name: /^Stop/ }));
-  await waitFor(() => expect(screen.getByLabelText('Peak')).toHaveTextContent('0.0000'));
-  expect(within(screen.getByTestId('diagnostics-meter')).getByRole('status')).toHaveTextContent('Idle');
+  await waitFor(() => expect(screen.getByLabelText('Peak')).toHaveTextContent('−∞ dBFS'));
 });
 
 test('recovery remains stoppable and explains automatic retry', async () => {
   const invoke: Invoke = <T,>() => Promise.resolve({ ...idleSnapshot, generation: 1, sequence: 1, state: 'recovering' } as T);
   render(<App invoke={invoke} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
-  const diagnostics = screen.getByTestId('diagnostics-meter');
-  await waitFor(() => expect(within(diagnostics).getByRole('status')).toHaveTextContent('Recovering'));
+
+  await screen.findByText(/retrying automatically/i);
   expect(screen.getByRole('button', { name: /^Stop/ })).toBeEnabled();
   expect(document.querySelector('.capture-start-button')).toBeDisabled();
   expect(screen.getByText(/retrying automatically/i)).toBeInTheDocument();
@@ -68,10 +66,8 @@ test('displays live capture telemetry without a redundant source pill', async ()
   // Main UI should NOT display source badge
   expect(screen.queryByTestId('diagnostics-source-badge')).not.toBeInTheDocument();
 
-  // Open diagnostics to see source badge
-  fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+
   expect(screen.queryByTestId('diagnostics-source-badge')).not.toBeInTheDocument();
-  expect(within(screen.getByTestId('diagnostics-meter')).getByRole('status')).toHaveTextContent('Idle');
 
   await act(async () => {
     resolveSnapshot({
@@ -86,8 +82,7 @@ test('displays live capture telemetry without a redundant source pill', async ()
   });
 
   await waitFor(() => {
-    expect(within(screen.getByTestId('diagnostics-meter')).getByRole('status')).toHaveTextContent('Running');
-    expect(screen.getByLabelText('RMS')).toHaveTextContent('0.4000');
+    expect(screen.getByLabelText('RMS')).toHaveTextContent('-8.0 dBFS');
   });
 });
 

@@ -1288,3 +1288,5 @@ fieldset.control-card { min-inline-size: 0; padding-inline: 0; }
 .spotify-timeline input:disabled { cursor: default; opacity: .45; }
 .spotify-error { margin: .4rem 0 0; font-size: .75rem; color: #ffc9b8; overflow-wrap: anywhere; }
 .spotify-player button:focus-visible, .spotify-timeline input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+.capture-guidance { margin: .35rem 0 0; min-height: 1.25em; color: var(--muted-foreground); font-size: .7rem; line-height: 1.4; }

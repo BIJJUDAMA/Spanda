@@ -19,6 +19,8 @@ export const SCENE_OPTIONS = [
   { value: 'particle-sphere', label: 'Particle Sphere' },
 ];
 
+
+
 export const PALETTE_OPTIONS: { value: Palette; label: string; colors: [string, string, string] }[] = [
   { value: 'aurora', label: 'Aurora', colors: ['#19e573', '#1ab3e6', '#a94be8'] },
   { value: 'ember', label: 'Ember', colors: ['#e6472e', '#ff8b17', '#ffd543'] },
@@ -53,7 +55,7 @@ export function ExperienceControls({
   return (
     <div className="experience-controls-container" role="group" aria-label="Visual experience controls">
       <div className="experience-fields">
-        <div className="scene-control control-card">
+        <div className="scene-control control-card"><Tooltip content="Change scene" shortcut="← / →" className="scene-shortcut-hint">
           <label htmlFor="scene-select">Scene</label>
           <CustomSelect
             id="scene-select"
@@ -62,13 +64,14 @@ export function ExperienceControls({
             options={SCENE_OPTIONS}
             onChange={(val) => onUpdate({ sceneId: val })}
           />
+          </Tooltip>
         </div>
 
         <fieldset className="palette-control control-card">
           <legend>Palette</legend>
           <div className="palette-swatches" role="group" aria-label="Color palette">
             {PALETTE_OPTIONS.map((option) => (
-              <Tooltip key={option.value} content={option.label} side="top">
+              <Tooltip key={option.value} content={option.label} shortcut="↑ / ↓" side="top">
                 <button
                   type="button"
                   className={`palette-swatch ${settings.palette === option.value ? 'is-selected' : ''}`}
@@ -142,7 +145,7 @@ export function ExperienceControls({
       <div className="experience-actions">
         <Tooltip
           content={isFullscreen ? 'Exit full screen view' : 'Enter full screen visualization'}
-          shortcut={isFullscreen ? 'Esc' : undefined}
+          shortcut={isFullscreen ? 'Esc / F / F11' : 'F / F11'}
           side="top"
         >
           <button
@@ -169,6 +172,3 @@ export function ExperienceControls({
     </div>
   );
 }
-
-
-

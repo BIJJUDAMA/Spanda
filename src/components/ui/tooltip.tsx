@@ -22,7 +22,7 @@ export function Tooltip({
   content,
   shortcut,
   side = 'top',
-  delay = 800,
+  delay = 300,
   disabled = false,
   className,
   children,
@@ -108,13 +108,19 @@ export function Tooltip({
     setMounted(false);
   }, []);
 
-  const handleOpen = useCallback(() => {
+  const handleOpen = useCallback((immediate = false) => {
     if (disabled || !content) return;
     if (!isTriggerActiveAndVisible()) return;
 
     if (hideTimerRef.current) {
       window.clearTimeout(hideTimerRef.current);
       hideTimerRef.current = null;
+    }
+    if (showTimerRef.current) window.clearTimeout(showTimerRef.current);
+    if (immediate || mounted) {
+      setMounted(true);
+      setAnimState('entering');
+      return;
     }
 
     showTimerRef.current = window.setTimeout(() => {
@@ -126,16 +132,31 @@ export function Tooltip({
         dismissImmediately();
       }
     }, delay);
-  }, [disabled, content, delay, isTriggerActiveAndVisible, dismissImmediately]);
+  }, [disabled, content, delay, mounted, isTriggerActiveAndVisible, dismissImmediately]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' || event.key.toLowerCase() === 'h') dismissImmediately();
+    };
+    window.addEventListener('dismiss-tooltips', dismissImmediately);
+    window.addEventListener('blur', dismissImmediately);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('dismiss-tooltips', dismissImmediately);
+      window.removeEventListener('blur', dismissImmediately);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [dismissImmediately]);
 
   const handleClose = useCallback(() => {
     if (showTimerRef.current) {
       window.clearTimeout(showTimerRef.current);
       showTimerRef.current = null;
     }
-    if (mounted) {
+    if (mounted && hideTimerRef.current === null) {
       setAnimState('leaving');
       hideTimerRef.current = window.setTimeout(() => {
+        hideTimerRef.current = null;
         setMounted(false);
       }, 140); // Matches tooltipFadeOut animation duration
     }
@@ -148,15 +169,6 @@ export function Tooltip({
       updatePosition();
 
       const onScrollOrResize = () => updatePosition();
-      const onGlobalDismiss = () => dismissImmediately();
-      const onWindowBlur = () => dismissImmediately();
-
-      const onKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape' || e.key === 'h' || e.key === 'H') {
-          dismissImmediately();
-        }
-      };
-
       const onPointerDown = (e: PointerEvent) => {
         if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
           dismissImmediately();
@@ -182,18 +194,12 @@ export function Tooltip({
 
       window.addEventListener('scroll', onScrollOrResize, true);
       window.addEventListener('resize', onScrollOrResize);
-      window.addEventListener('dismiss-tooltips', onGlobalDismiss);
-      window.addEventListener('blur', onWindowBlur);
-      window.addEventListener('keydown', onKeyDown);
       window.addEventListener('pointerdown', onPointerDown, true);
       window.addEventListener('mousemove', onMouseMove, { passive: true });
 
       return () => {
         window.removeEventListener('scroll', onScrollOrResize, true);
         window.removeEventListener('resize', onScrollOrResize);
-        window.removeEventListener('dismiss-tooltips', onGlobalDismiss);
-        window.removeEventListener('blur', onWindowBlur);
-        window.removeEventListener('keydown', onKeyDown);
         window.removeEventListener('pointerdown', onPointerDown, true);
         window.removeEventListener('mousemove', onMouseMove);
       };
@@ -211,14 +217,16 @@ export function Tooltip({
     <span
       ref={triggerRef}
       className={cn('tooltip-wrapper', className)}
-      onMouseEnter={handleOpen}
+      onMouseEnter={() => handleOpen()}
       onMouseLeave={handleClose}
-      onFocusCapture={handleOpen}
+      onFocusCapture={() => handleOpen(true)}
       onBlurCapture={handleClose}
       onClickCapture={handleClose}
       aria-describedby={mounted ? tooltipId : undefined}
     >
-      {children}
+      {React.isValidElement<{ 'aria-describedby'?: string }>(children)
+        ? React.cloneElement(children, { 'aria-describedby': [children.props['aria-describedby'], mounted ? tooltipId : undefined].filter(Boolean).join(' ') || undefined })
+        : children}
       {mounted &&
         createPortal(
           <div

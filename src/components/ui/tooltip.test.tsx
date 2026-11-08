@@ -111,7 +111,7 @@ describe('Tooltip', () => {
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 
-  it('uses 800ms default delay when no delay prop is passed', () => {
+  it('uses 300ms default hover delay when no delay prop is passed', () => {
     render(
       <Tooltip content="Default delay message">
         <button type="button">Default Delay</button>
@@ -121,13 +121,13 @@ describe('Tooltip', () => {
     const triggerWrap = screen.getByRole('button', { name: 'Default Delay' }).parentElement!;
     fireEvent.mouseEnter(triggerWrap);
 
-    // At 750ms, not yet visible
+    // At 250ms, not yet visible
     act(() => {
-      vi.advanceTimersByTime(750);
+      vi.advanceTimersByTime(250);
     });
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
 
-    // At 850ms, visible
+    // At 350ms, visible
     act(() => {
       vi.advanceTimersByTime(100);
     });
@@ -186,6 +186,33 @@ describe('Tooltip', () => {
     act(() => {
       vi.advanceTimersByTime(100);
     });
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('explains a focused action immediately without waiting for the hover delay', () => {
+    render(<Tooltip content="What happens next"><button>Action</button></Tooltip>);
+    fireEvent.focus(screen.getByRole('button', { name: 'Action' }));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('What happens next');
+    expect(screen.getByRole('button', { name: 'Action' })).toHaveAttribute('aria-describedby', screen.getByRole('tooltip').id);
+  });
+
+  it('re-entering an exiting tooltip cancels its pending removal', () => {
+    render(<Tooltip content="Hint"><button>Action</button></Tooltip>);
+    const trigger = screen.getByRole('button', { name: 'Action' }).parentElement!;
+    fireEvent.mouseEnter(trigger);
+    act(() => vi.advanceTimersByTime(350));
+    fireEvent.mouseLeave(trigger);
+    act(() => vi.advanceTimersByTime(80));
+    fireEvent.mouseEnter(trigger);
+    act(() => vi.advanceTimersByTime(200));
+    expect(screen.getByRole('tooltip')).toHaveClass('is-entering');
+  });
+
+  it('cancels a not-yet-visible hint when Escape is pressed', () => {
+    render(<Tooltip content="Cancelled hint"><button>Action</button></Tooltip>);
+    fireEvent.mouseEnter(screen.getByRole('button', { name: 'Action' }).parentElement!);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    act(() => vi.advanceTimersByTime(500));
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 });
