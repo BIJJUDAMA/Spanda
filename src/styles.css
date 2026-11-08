@@ -1432,3 +1432,9 @@ fieldset.control-card { min-inline-size: 0; padding-inline: 0; }
 @media (prefers-reduced-motion: reduce) { .hud-tab-indicator { transition: none; } }
 
 .scene-shortcut-hint { display: block; width: 100%; }
+
+/* Keep both columns at their natural height, then fit the complete HUD as one surface. */
+.hud-layout[data-compact="false"] {
+  max-height: none;
+  zoom: var(--hud-fit-scale, 1);
+}

@@ -21,6 +21,7 @@ import { DiagnosticsMeter } from './components/DiagnosticsMeter';
 import { createSettingsStore, type ExperienceSettings } from './experience/settings';
 import { nextControlsVisibility } from './experience/visibility';
 import { useCompactHud } from './experience/compact';
+import { useHudFit } from './experience/hud-fit';
 import { useTabMotion } from './experience/tab-motion';
 import { VisualEngine } from './visualizers/engine';
 import type { Palette } from './visualizers/types';
@@ -48,6 +49,7 @@ export default function App({
   const [mediaNeedsAttention, setMediaNeedsAttention] = useState(false);
   const [manuallyHidden, setManuallyHidden] = useState<boolean>(false);
   const compact = useCompactHud();
+  useHudFit(panelRef, compact);
   const [compactPanel, setCompactPanel] = useState<'visuals' | 'spotify' | 'diagnostics'>('visuals');
   const prepareTabMotion = useTabMotion(panelRef, compact, compactPanel);
   const selectCompactPanel = (panel: typeof compactPanel) => {
