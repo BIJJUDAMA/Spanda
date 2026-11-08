@@ -189,3 +189,14 @@ it('double-clicking the sensitivity value resets it, with keyboard activation av
   fireEvent.click(reset, { detail: 0 });
   expect(onUpdate).toHaveBeenCalledWith({ sensitivity: 1 });
 });
+
+it('compact controls retain all dynamics and quality options in selects', () => {
+  const onUpdate = vi.fn();
+  render(<ExperienceControls compact settings={initialExperienceSettings} onUpdate={onUpdate}
+    isFullscreen={false} onToggleFullscreen={vi.fn()} onHideControls={vi.fn()} />);
+  fireEvent.change(screen.getByTestId('dynamics-select'), { target: { value: 'liquid' } });
+  expect(onUpdate).toHaveBeenCalledWith({ response: 'liquid' });
+  fireEvent.change(screen.getByTestId('quality-select'), { target: { value: 'high' } });
+  expect(onUpdate).toHaveBeenCalledWith({ quality: 'high' });
+  expect(screen.getByRole('slider', { name: 'Sensitivity' })).toBeInTheDocument();
+});

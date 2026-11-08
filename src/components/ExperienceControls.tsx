@@ -11,6 +11,7 @@ export interface ExperienceControlsProps {
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
   onHideControls: () => void;
+  compact?: boolean;
 }
 
 export { SCENE_OPTIONS } from '../visualizers/catalog';
@@ -45,6 +46,7 @@ export function ExperienceControls({
   isFullscreen,
   onToggleFullscreen,
   onHideControls,
+  compact = false,
 }: ExperienceControlsProps) {
   return (
     <div className="experience-controls-container" role="group" aria-label="Visual experience controls">
@@ -91,6 +93,8 @@ export function ExperienceControls({
 
         <fieldset className="response-control control-card">
           <legend>Dynamics</legend>
+          {compact ? <CustomSelect id="dynamics-select" ariaLabel="Dynamics response" value={settings.response}
+            options={RESPONSE_OPTIONS} onChange={value => onUpdate({ response: value as ResponseStyle })} /> :
           <div className="choice-grid response-grid" role="group" aria-label="Dynamics response">
             {RESPONSE_OPTIONS.map((option) => (
               <button
@@ -105,11 +109,13 @@ export function ExperienceControls({
                 <small>{option.detail}</small>
               </button>
             ))}
-          </div>
+          </div>}
         </fieldset>
 
         <fieldset className="quality-control control-card">
           <legend>Render quality</legend>
+          {compact ? <CustomSelect id="quality-select" ariaLabel="Render quality" value={settings.quality}
+            options={QUALITY_OPTIONS} onChange={value => onUpdate({ quality: value as Quality })} /> :
           <div className="choice-grid quality-grid" role="group" aria-label="Render quality">
             {QUALITY_OPTIONS.map((option) => (
               <button
@@ -124,7 +130,7 @@ export function ExperienceControls({
                 <small>{option.detail}</small>
               </button>
             ))}
-          </div>
+          </div>}
         </fieldset>
 
         <div className="sensitivity-control control-card">

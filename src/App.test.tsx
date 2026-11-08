@@ -318,6 +318,34 @@ test('deliberate keyboard navigation still operates the scene menu', () => {
   expect(trigger).toHaveAttribute('aria-expanded', 'false');
 });
 
+test('compact HUD uses separate panels, preserves settings and returns to two columns on resize', () => {
+  const previous = window.matchMedia;
+  let compact = true;
+  window.matchMedia = vi.fn((query: string) => ({ matches: compact && query.includes('760px'), media: query,
+    addEventListener: vi.fn(), removeEventListener: vi.fn() })) as unknown as typeof window.matchMedia;
+  try {
+    const ui = render(<App invoke={() => new Promise(() => {})} />);
+    expect(screen.getByRole('tab', { name: 'Visuals' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Sensitivity' }), { key: 'ArrowRight' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Spotify' }));
+    expect(screen.getByRole('region', { name: 'Spotify player' })).toBeInTheDocument();
+    expect(screen.queryByRole('slider', { name: 'Sensitivity' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Audio telemetry' })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Spotify' }), { key: 'ArrowRight' });
+    expect(screen.getByRole('tab', { name: 'Diagnostics' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('group', { name: 'Audio telemetry' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Spotify player' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Visuals' }));
+    expect(screen.getByRole('slider', { name: 'Sensitivity' })).toHaveAttribute('aria-valuenow', '1.05');
+    compact = false;
+    fireEvent.resize(window);
+    expect(screen.queryByRole('tablist', { name: 'HUD panels' })).not.toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Audio telemetry' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Spotify player' })).toBeInTheDocument();
+    ui.unmount();
+  } finally { window.matchMedia = previous; }
+});
+
 test('restores visual choices on reopening without starting capture', () => {
   localStorage.setItem(VISUAL_SETTINGS_KEY, JSON.stringify({ version: 1, settings: { sceneId: 'kaleidoscope', palette: 'cosmic', sensitivity: 1.4 } }));
   const invoke = vi.fn<Invoke>(() => new Promise(() => {}));

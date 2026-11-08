@@ -11,6 +11,7 @@ import {
 } from './audio/types';
 import { CaptureControls } from './CaptureControls';
 import { SpotifyPlayer } from './components/SpotifyPlayer';
+import banner from '../assets/banner.png';
 import {
   ExperienceControls,
   SCENE_OPTIONS,
@@ -19,6 +20,8 @@ import {
 import { DiagnosticsMeter } from './components/DiagnosticsMeter';
 import { createSettingsStore, type ExperienceSettings } from './experience/settings';
 import { nextControlsVisibility } from './experience/visibility';
+import { useCompactHud } from './experience/compact';
+import { useTabMotion } from './experience/tab-motion';
 import { VisualEngine } from './visualizers/engine';
 import type { Palette } from './visualizers/types';
 
@@ -44,6 +47,15 @@ export default function App({
   const [pointerActive, setPointerActive] = useState(false);
   const [mediaNeedsAttention, setMediaNeedsAttention] = useState(false);
   const [manuallyHidden, setManuallyHidden] = useState<boolean>(false);
+  const compact = useCompactHud();
+  const [compactPanel, setCompactPanel] = useState<'visuals' | 'spotify' | 'diagnostics'>('visuals');
+  const prepareTabMotion = useTabMotion(panelRef, compact, compactPanel);
+  const selectCompactPanel = (panel: typeof compactPanel) => {
+    if (panel === compactPanel) return;
+    prepareTabMotion();
+    setCompactPanel(panel);
+  };
+
   const lastInteractionRef = useRef<number>(Date.now());
 
   const recordInteraction = useCallback(() => {
@@ -293,6 +305,7 @@ export default function App({
 
 
       <div className={`hud-layout ${showControls ? 'controls-visible' : 'controls-hidden'}`}
+        data-compact={compact}
         ref={panelRef}
         aria-hidden={!showControls}
         inert={!showControls}
@@ -309,18 +322,39 @@ export default function App({
           if (target?.closest('button, [role="slider"], [role="option"]')) event.preventDefault();
         }}
         onKeyDownCapture={(event) => { if (event.key === 'Tab') event.currentTarget.dataset.inputModality = 'keyboard'; }}>
+        {compact && <nav className="hud-compact-tabs" role="tablist" aria-label="HUD panels"
+          onKeyDown={event => {
+            const panels = ['visuals', 'spotify', 'diagnostics'] as const;
+            const index = panels.indexOf(compactPanel);
+            const next = event.key === 'ArrowRight' ? (index + 1) % 3 : event.key === 'ArrowLeft' ? (index + 2) % 3
+              : event.key === 'Home' ? 0 : event.key === 'End' ? 2 : -1;
+            if (next < 0) return;
+            event.preventDefault(); event.stopPropagation();
+            selectCompactPanel(panels[next]);
+            event.currentTarget.querySelectorAll<HTMLButtonElement>('button')[next]?.focus();
+          }}>
+          <span className="hud-tab-indicator" aria-hidden="true" style={{ transform: `translateX(calc(${['visuals', 'spotify', 'diagnostics'].indexOf(compactPanel)} * (100% + .25rem)))` }} />
+            {(['visuals', 'spotify', 'diagnostics'] as const).map(panel => <button key={panel} type="button" role="tab"
+            id={`hud-tab-${panel}`} aria-selected={compactPanel === panel} tabIndex={compactPanel === panel ? 0 : -1}
+            aria-controls={panel === 'visuals' ? 'hud-visuals-panel' : 'diagnostics-panel'}
+            onClick={() => { selectCompactPanel(panel); recordInteraction(); }}>{panel === 'visuals' ? 'Visuals' : panel === 'spotify' ? 'Spotify' : 'Diagnostics'}</button>)}
+        </nav>}
         <DiagnosticsMeter
           frame={activeFrame}
           source={activeSource}
           view={view}
-          isVisible={showControls}
+          isVisible={showControls && (!compact || compactPanel === 'diagnostics')}
+          mode={!compact ? 'full' : compactPanel === 'spotify' ? 'player' : 'diagnostics'}
+          hidden={compact && compactPanel === 'visuals'}
         >
           <SpotifyPlayer invoke={invoke} listen={listen} onAttentionChange={setMediaNeedsAttention} />
         </DiagnosticsMeter>
         <section
           id="hud-visuals-panel"
+          role={compact ? 'tabpanel' : undefined}
+          hidden={compact && compactPanel !== 'visuals'}
           className={`idle-panel liquidGlass-wrapper ${showControls ? 'controls-visible' : 'controls-hidden'}`}
-          aria-labelledby="app-title"
+          aria-labelledby={compact ? 'hud-tab-visuals' : 'app-title'}
           aria-hidden={!showControls}
           inert={!showControls}
         >
@@ -330,7 +364,7 @@ export default function App({
         <div className="liquidGlass-text main-panel-content">
           <header className="panel-header">
             <div className="brand-lockup">
-              <h1 id="app-title">Spanda</h1>
+              <h1 id="app-title"><img className="hud-brand-banner" src={banner} alt="Spanda" draggable={false} /></h1>
             </div>
           </header>
 
@@ -345,6 +379,7 @@ export default function App({
               isFullscreen={isFullscreen}
               onToggleFullscreen={toggleFullscreen}
               onHideControls={handleHideControls}
+              compact={compact}
             />
 
           </div>
