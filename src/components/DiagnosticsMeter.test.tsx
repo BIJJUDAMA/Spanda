@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DiagnosticsMeter } from './DiagnosticsMeter';
 import { defaultAnalysisFrame, idleView, type AudioView, type UnifiedAnalysisFrame } from '../audio/types';
@@ -22,18 +22,17 @@ describe('DiagnosticsMeter component', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders nothing when isVisible is false', () => {
+  it('stays mounted when the HUD is hidden', () => {
     const { container } = render(
       <DiagnosticsMeter
         frame={defaultAnalysisFrame}
         source="idle"
         isVisible={false}
-        onToggle={vi.fn()}
       />
     );
 
-    expect(container.firstChild).toBeNull();
-    expect(screen.queryByTestId('diagnostics-meter')).not.toBeInTheDocument();
+    expect(container.firstChild).not.toBeNull();
+    expect(screen.getByTestId('diagnostics-meter')).toBeInTheDocument();
   });
 
   it('renders meter container and waveform canvas with exact dimensions (240x48px)', () => {
@@ -42,7 +41,6 @@ describe('DiagnosticsMeter component', () => {
         frame={defaultAnalysisFrame}
         source="idle"
         isVisible={true}
-        onToggle={vi.fn()}
       />
     );
 
@@ -61,7 +59,6 @@ describe('DiagnosticsMeter component', () => {
         frame={defaultAnalysisFrame}
         source="idle"
         isVisible={true}
-        onToggle={vi.fn()}
       />
     );
 
@@ -87,7 +84,6 @@ describe('DiagnosticsMeter component', () => {
         frame={frame}
         source="wasapi"
         isVisible={true}
-        onToggle={vi.fn()}
       />
     );
 
@@ -102,29 +98,27 @@ describe('DiagnosticsMeter component', () => {
     expect(lastBar).toHaveStyle({ height: '20%' });
   });
 
-  it('toggles is-beat class on beat flash indicator when frame.beat is true/false', () => {
+  it('omits the beat indicator even when a beat is detected', () => {
     const { rerender } = render(
       <DiagnosticsMeter
         frame={{ ...defaultAnalysisFrame, beat: false }}
         source="wasapi"
         isVisible={true}
-        onToggle={vi.fn()}
       />
     );
 
-    const indicator = screen.getByTestId('beat-flash-indicator');
-    expect(indicator).not.toHaveClass('is-beat');
+    const indicator = screen.queryByTestId('beat-flash-indicator');
+    expect(indicator).not.toBeInTheDocument();
 
     rerender(
       <DiagnosticsMeter
         frame={{ ...defaultAnalysisFrame, beat: true }}
         source="wasapi"
         isVisible={true}
-        onToggle={vi.fn()}
       />
     );
 
-    expect(indicator).toHaveClass('is-beat');
+    expect(screen.queryByTestId('beat-flash-indicator')).not.toBeInTheDocument();
   });
 
   it('renders real-time numerical readouts: RMS, Peak, BPM, and Confidence', () => {
@@ -141,12 +135,12 @@ describe('DiagnosticsMeter component', () => {
         frame={testFrame}
         source="wasapi"
         isVisible={true}
-        onToggle={vi.fn()}
       />
     );
 
-    expect(screen.getByTestId('stat-rms')).toHaveTextContent('0.3542');
-    expect(screen.getByTestId('stat-peak')).toHaveTextContent('0.8921');
+    expect(screen.getByTestId('stat-rms')).toHaveTextContent('-9.0 dBFS');
+    expect(screen.getByTestId('stat-peak')).toHaveTextContent('-1.0 dBFS');
+    expect(screen.getByText('Tempo confidence')).toBeInTheDocument();
     expect(screen.getByTestId('stat-bpm')).toHaveTextContent('126');
     expect(screen.getByTestId('stat-confidence')).toHaveTextContent('92%');
   });
@@ -157,7 +151,6 @@ describe('DiagnosticsMeter component', () => {
         frame={{ ...defaultAnalysisFrame, bpm: 0, confidence: 0 }}
         source="idle"
         isVisible={true}
-        onToggle={vi.fn()}
       />
     );
 
@@ -171,39 +164,26 @@ describe('DiagnosticsMeter component', () => {
         frame={defaultAnalysisFrame}
         source="wasapi"
         isVisible={true}
-        onToggle={vi.fn()}
       />
     );
 
     expect(screen.queryByTestId('diagnostics-source-badge')).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Running');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
 
     rerender(
       <DiagnosticsMeter
         frame={defaultAnalysisFrame}
         source="idle"
         isVisible={true}
-        onToggle={vi.fn()}
       />
     );
     expect(screen.queryByTestId('diagnostics-source-badge')).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Idle');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  it('calls onToggle when clicking the close button', () => {
-    const onToggleMock = vi.fn();
-    render(
-      <DiagnosticsMeter
-        frame={defaultAnalysisFrame}
-        source="idle"
-        isVisible={true}
-        onToggle={onToggleMock}
-      />
-    );
-
-    const closeBtn = screen.getByRole('button', { name: /close diagnostics/i });
-    fireEvent.click(closeBtn);
-    expect(onToggleMock).toHaveBeenCalledTimes(1);
+  it('does not offer a separate close button', () => {
+    render(<DiagnosticsMeter frame={defaultAnalysisFrame} isVisible />);
+    expect(screen.queryByRole('button', { name: /close diagnostics/i })).not.toBeInTheDocument();
   });
 
   it('renders live waveform on canvas using 2D context', () => {
@@ -224,7 +204,6 @@ describe('DiagnosticsMeter component', () => {
         frame={frame}
         source="wasapi"
         isVisible={true}
-        onToggle={vi.fn()}
       />
     );
 
@@ -236,7 +215,7 @@ describe('DiagnosticsMeter component', () => {
     expect(mockCtx.lineTo).toHaveBeenCalled();
   });
 
-  it('renders synthetic preview when audio waveform is silent', () => {
+  it('renders a flat waveform and no spectrum energy during silence', () => {
     const mockCtx = createMockCtx();
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
       mockCtx as unknown as RenderingContext
@@ -253,16 +232,19 @@ describe('DiagnosticsMeter component', () => {
         frame={silentFrame}
         source="idle"
         isVisible={true}
-        onToggle={vi.fn()}
       />
     );
 
     expect(mockCtx.clearRect).toHaveBeenCalledWith(0, 0, 240, 48);
     expect(mockCtx.beginPath).toHaveBeenCalled();
     expect(mockCtx.stroke).toHaveBeenCalled();
+    expect(mockCtx.moveTo.mock.calls.every(([, y]) => y === 24)).toBe(true);
+    expect(mockCtx.lineTo.mock.calls.every(([, y]) => y === 24)).toBe(true);
+    expect(screen.getByTestId('diagnostics-bar-0')).toHaveStyle({ height: '0%' });
+    expect(screen.getByTestId('stat-rms')).toHaveTextContent('−∞ dBFS');
   });
 
-  it('renders Format, Signal, Session, and Status without the output label', () => {
+  it('renders Format, Signal, and Status without Output or Session', () => {
     const testView: AudioView = {
       ...idleView,
       state: 'running',
@@ -279,14 +261,36 @@ describe('DiagnosticsMeter component', () => {
         view={testView}
         source="wasapi"
         isVisible={true}
-        onToggle={vi.fn()}
       />
     );
 
-    expect(screen.getByRole('status')).toHaveTextContent('Running');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stat-output')).not.toBeInTheDocument();
     expect(screen.getByTestId('stat-format')).toHaveTextContent('48000 Hz / 2 channels');
     expect(screen.getByTestId('stat-signal')).toHaveTextContent('Audio detected');
-    expect(screen.getByTestId('stat-session')).toHaveTextContent('2 / 120');
+    expect(screen.queryByTestId('stat-session')).not.toBeInTheDocument();
+  });
+
+  it('shows independent channel peaks on a bounded dB scale', () => {
+    render(<DiagnosticsMeter frame={{ ...defaultAnalysisFrame, leftPeak: 1, rightPeak: 0.1 }} isVisible />);
+    const left = screen.getByRole('meter', { name: 'Left channel peak' });
+    const right = screen.getByRole('meter', { name: 'Right channel peak' });
+    expect(left).toHaveAttribute('aria-valuenow', '0');
+    expect(left).toHaveAttribute('aria-valuetext', '0.0 dBFS');
+    expect(left.firstChild).toHaveStyle({ width: '100%' });
+    expect(right).toHaveAttribute('aria-valuenow', '-20');
+    expect(right).toHaveAttribute('aria-valuetext', '-20.0 dBFS');
+  });
+
+  it('handles silent, over-full-scale, and invalid input without invalid meter values', () => {
+    const { rerender } = render(<DiagnosticsMeter frame={{ ...defaultAnalysisFrame, rms: NaN, peak: 2, leftPeak: NaN, rightPeak: 2, mel: [NaN, -1, 2] }} isVisible />);
+    expect(screen.getByTestId('stat-rms')).toHaveTextContent('−∞ dBFS');
+    expect(screen.getByTestId('stat-peak')).toHaveTextContent('6.0 dBFS');
+    expect(screen.getByRole('meter', { name: 'Left channel peak' })).toHaveAttribute('aria-valuenow', '-60');
+    expect(screen.getByRole('meter', { name: 'Right channel peak' })).toHaveAttribute('aria-valuenow', '0');
+    expect(screen.getByTestId('diagnostics-bar-0')).toHaveStyle({ height: '0%' });
+    expect(screen.getByTestId('diagnostics-bar-2')).toHaveStyle({ height: '100%' });
+    rerender(<DiagnosticsMeter frame={defaultAnalysisFrame} isVisible />);
+    for (const meter of screen.getAllByRole('meter')) expect(meter.firstChild).toHaveStyle({ width: '0%' });
   });
 });

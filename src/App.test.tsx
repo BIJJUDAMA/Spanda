@@ -3,6 +3,7 @@ import { expect, test, vi } from 'vitest';
 import App from './App';
 import type { Invoke } from './audio/types';
 
+
 test('starts idle with Start available and Stop disabled', () => {
   const invoke: Invoke = () => new Promise(() => {});
   render(<App invoke={invoke} />);
@@ -10,10 +11,6 @@ test('starts idle with Start available and Stop disabled', () => {
   expect(screen.getByRole('button', { name: /^Start$/ })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Stop' })).toBeDisabled();
   expect(screen.getByRole('heading', { name: 'Spanda' })).toBeInTheDocument();
-  // Diagnostics meter is hidden by default
-  expect(screen.queryByTestId('diagnostics-meter')).not.toBeInTheDocument();
-  // Opening diagnostics reveals the meter
-  fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
   expect(screen.getByTestId('diagnostics-meter')).toBeInTheDocument();
 });
 
@@ -36,48 +33,29 @@ test('clicking Hide Controls hides the panel and cursor until mouse is moved', (
   expect(document.documentElement).not.toHaveClass('cursor-hidden');
 });
 
-test('hiding controls closes Diagnostics before hiding the main HUD', async () => {
-  const invoke: Invoke = () => new Promise(() => {});
-  const { container } = render(<App invoke={invoke} />);
-  const panel = container.querySelector('.idle-panel');
-
-  fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+test('Diagnostics hides and returns with the main HUD without collapsing', () => {
+  const { container } = render(<App invoke={() => new Promise(() => {})} />);
+  const diagnostics = screen.getByTestId('diagnostics-meter');
+  const layout = diagnostics.closest('.hud-layout');
   fireEvent.click(screen.getByRole('button', { name: 'Hide controls until mouse is moved' }));
-
-  expect(screen.getByTestId('diagnostics-meter')).toHaveClass('is-closing');
-  expect(panel).toHaveClass('controls-visible');
-  expect(panel?.closest('.hud-layout')).toHaveClass('diagnostics-open');
-  await waitFor(() => expect(panel).toHaveClass('controls-hidden'));
-  expect(panel?.closest('.hud-layout')).not.toHaveClass('diagnostics-open');
-  expect(screen.queryByTestId('diagnostics-meter')).not.toBeInTheDocument();
+  expect(layout).toHaveClass('controls-hidden');
+  expect(layout).toHaveAttribute('inert');
+  expect(diagnostics).toBeInTheDocument();
+  expect(diagnostics).not.toHaveClass('is-closing');
+  fireEvent.mouseMove(window);
+  expect(layout).toHaveClass('controls-visible');
+  expect(container.querySelector('.idle-panel')?.parentElement).toBe(layout);
 });
 
-test('Diagnostics pauses HUD auto-hide and the countdown starts after it closes', () => {
+test('permanent Diagnostics follows HUD auto-hide instead of preventing it', () => {
   vi.useFakeTimers();
   try {
-    const invoke: Invoke = () => new Promise(() => {});
-    const { container } = render(<App invoke={invoke} />);
-    const panel = container.querySelector('.idle-panel');
-    const diagnosticsButton = screen.getByRole('button', { name: 'Diagnostics' });
-
-    fireEvent.click(diagnosticsButton);
-    act(() => vi.advanceTimersByTime(2000));
-
-    expect(screen.getByTestId('diagnostics-meter')).toBeInTheDocument();
-    expect(panel).toHaveClass('controls-visible');
-    expect(panel?.closest('.hud-layout')).toHaveClass('diagnostics-open');
-
-    fireEvent.click(diagnosticsButton);
-    act(() => vi.advanceTimersByTime(900));
-    expect(panel).toHaveClass('controls-visible');
-
-    act(() => vi.advanceTimersByTime(300));
-    expect(panel).toHaveClass('controls-hidden');
-    expect(panel?.closest('.hud-layout')).not.toHaveClass('diagnostics-open');
-    expect(screen.queryByTestId('diagnostics-meter')).not.toBeInTheDocument();
-  } finally {
-    vi.useRealTimers();
-  }
+    render(<App invoke={() => new Promise(() => {})} />);
+    const diagnostics = screen.getByTestId('diagnostics-meter');
+    act(() => vi.advanceTimersByTime(1100));
+    expect(diagnostics.closest('.hud-layout')).toHaveClass('controls-hidden');
+    expect(diagnostics).toBeInTheDocument();
+  } finally { vi.useRealTimers(); }
 });
 
 test('pressing H key toggles hiding the panel', () => {
@@ -96,39 +74,18 @@ test('pressing H key toggles hiding the panel', () => {
   expect(panel).toHaveClass('controls-visible');
 });
 
-test('clicking Diagnostics button toggles the live diagnostics meter', async () => {
-  const invoke: Invoke = () => new Promise(() => {});
-  render(<App invoke={invoke} />);
-
-  expect(screen.queryByTestId('diagnostics-meter')).not.toBeInTheDocument();
-
-  const diagButton = screen.getByRole('button', { name: 'Diagnostics' });
-  fireEvent.click(diagButton);
-
-  const diagnostics = screen.getByTestId('diagnostics-meter');
-  expect(diagnostics).toBeInTheDocument();
-  expect(diagnostics.closest('.hud-layout')).toHaveClass('diagnostics-open');
-  expect(diagnostics.parentElement?.lastElementChild).toHaveClass('idle-panel');
-  expect(diagnostics).toHaveClass('diagnostics-sidebar');
-  expect(diagnostics).toHaveClass('is-open');
-
-  fireEvent.click(diagButton);
-  expect(screen.getByTestId('diagnostics-meter')).toHaveClass('is-closing');
-  await waitFor(() => expect(screen.queryByTestId('diagnostics-meter')).not.toBeInTheDocument());
+test('Diagnostics is permanently attached with no toggle or close button', () => {
+  render(<App invoke={() => new Promise(() => {})} />);
+  expect(screen.getByTestId('diagnostics-meter')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Diagnostics' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Close diagnostics' })).not.toBeInTheDocument();
 });
 
-test('pressing D key toggles the live diagnostics meter', async () => {
-  const invoke: Invoke = () => new Promise(() => {});
-  render(<App invoke={invoke} />);
-
-  expect(screen.queryByTestId('diagnostics-meter')).not.toBeInTheDocument();
-
+test('D no longer collapses Diagnostics', () => {
+  render(<App invoke={() => new Promise(() => {})} />);
   fireEvent.keyDown(window, { key: 'd' });
   expect(screen.getByTestId('diagnostics-meter')).toBeInTheDocument();
-
-  fireEvent.keyDown(window, { key: 'd' });
-  expect(screen.getByTestId('diagnostics-meter')).toHaveClass('is-closing');
-  await waitFor(() => expect(screen.queryByTestId('diagnostics-meter')).not.toBeInTheDocument());
+  expect(screen.queryByText('Toggle Diagnostics')).not.toBeInTheDocument();
 });
 
 test('pressing S key triggers start capture when idle and stop when running', async () => {
@@ -272,4 +229,12 @@ test('has no local-file controls and ignores dropped audio and playback shortcut
   expect(invoke.mock.calls.some(([command]) => command === 'start_capture' || command === 'stop_capture')).toBe(false);
   expect(screen.getByRole('button', { name: /^Start$/ })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Stop' })).toBeDisabled();
+});
+
+test('showing the HUD returns Diagnostics immediately without a separate timer', () => {
+  const { container } = render(<App invoke={() => new Promise(() => {})} />);
+  fireEvent.keyDown(window, { key: 'h' });
+  fireEvent.mouseMove(window);
+  expect(container.querySelector('.hud-layout')).toHaveClass('controls-visible');
+  expect(screen.getByTestId('diagnostics-meter')).not.toHaveClass('is-closing');
 });

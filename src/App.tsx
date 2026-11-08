@@ -9,15 +9,14 @@ import {
   type Invoke,
   type Listen,
 } from './audio/types';
-import { SpotifyPlayer } from './components/SpotifyPlayer';
 import { CaptureControls } from './CaptureControls';
+import { SpotifyPlayer } from './components/SpotifyPlayer';
 import {
   ExperienceControls,
   SCENE_OPTIONS,
   PALETTE_OPTIONS,
 } from './components/ExperienceControls';
 import { DiagnosticsMeter } from './components/DiagnosticsMeter';
-import { Tooltip } from './components/ui/tooltip';
 import { createSettingsStore, type ExperienceSettings } from './experience/settings';
 import { nextControlsVisibility } from './experience/visibility';
 import { VisualEngine } from './visualizers/engine';
@@ -32,7 +31,7 @@ export default function App({
 }) {
   const client = useRef<AudioClient | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const panelRef = useRef<HTMLElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<VisualEngine | null>(null);
   const settingsStore = useRef(createSettingsStore());
 
@@ -41,23 +40,12 @@ export default function App({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [focusWithin, setFocusWithin] = useState<boolean>(false);
+  const [mediaNeedsAttention, setMediaNeedsAttention] = useState(false);
   const [manuallyHidden, setManuallyHidden] = useState<boolean>(false);
-
-  const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
-  const [holdDiagnosticsLayout, setHoldDiagnosticsLayout] = useState<boolean>(false);
-
-  const hideControlsTimerRef = useRef<number | null>(null);
-
-
   const lastInteractionRef = useRef<number>(Date.now());
 
   const recordInteraction = useCallback(() => {
-    if (hideControlsTimerRef.current !== null) {
-      window.clearTimeout(hideControlsTimerRef.current);
-      hideControlsTimerRef.current = null;
-    }
     lastInteractionRef.current = Date.now();
-    setHoldDiagnosticsLayout(false);
     setManuallyHidden(false);
     setControlsVisible(true);
     if (engineRef.current && !engineRef.current.isRunning && !engineRef.current.isContextLost) {
@@ -70,30 +58,10 @@ export default function App({
       (document.activeElement as HTMLElement)?.blur();
     }
     setFocusWithin(false);
-    if (showDiagnostics) {
-      setShowDiagnostics(false);
-      setHoldDiagnosticsLayout(true);
-      if (hideControlsTimerRef.current !== null) {
-        window.clearTimeout(hideControlsTimerRef.current);
-      }
-      hideControlsTimerRef.current = window.setTimeout(() => {
-        setHoldDiagnosticsLayout(false);
-        setManuallyHidden(true);
-        setControlsVisible(false);
-        hideControlsTimerRef.current = null;
-      }, 240);
-    } else {
-      setManuallyHidden(true);
-      setControlsVisible(false);
-    }
+    setManuallyHidden(true);
+    setControlsVisible(false);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('dismiss-tooltips'));
-    }
-  }, [showDiagnostics]);
-
-  useEffect(() => () => {
-    if (hideControlsTimerRef.current !== null) {
-      window.clearTimeout(hideControlsTimerRef.current);
     }
   }, []);
 
@@ -156,11 +124,6 @@ export default function App({
         }
         return;
       }
-      if ((e.key === 'd' || e.key === 'D') && !focusWithin) {
-        recordInteraction();
-        setShowDiagnostics((prev) => !prev);
-        return;
-      }
       if ((e.key === 's' || e.key === 'S') && !focusWithin) {
         recordInteraction();
         const isCapturing = ['starting', 'running', 'recovering'].includes(view.state);
@@ -209,7 +172,6 @@ export default function App({
     };
     const onMouseMove = () => recordInteraction();
     const onPointerDown = () => recordInteraction();
-
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('pointerdown', onPointerDown);
@@ -234,14 +196,12 @@ export default function App({
   useEffect(() => {
     const timer = setInterval(() => {
       if (manuallyHidden) return;
-      if (showDiagnostics) return;
-      if (hideControlsTimerRef.current !== null) return;
       const isVisible = nextControlsVisibility({
         nowMs: Date.now(),
         lastInteractionMs: lastInteractionRef.current,
-        focusWithin,
+        focusWithin: focusWithin || view.pending,
         menuOpen: false,
-        hasError: Boolean(view.error || view.clientError),
+        hasError: Boolean(view.error || view.clientError || mediaNeedsAttention),
       });
       if (!isVisible && typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('dismiss-tooltips'));
@@ -252,7 +212,7 @@ export default function App({
     }, 100);
 
     return () => clearInterval(timer);
-  }, [focusWithin, manuallyHidden, showDiagnostics, view.error, view.clientError, handleHideControls]);
+  }, [focusWithin, view.pending, mediaNeedsAttention, manuallyHidden, view.error, view.clientError, handleHideControls]);
 
   // Audio and Visual Engine Initialization
   useEffect(() => {
@@ -315,24 +275,28 @@ export default function App({
     <main className="app">
       <div ref={containerRef} className="visualizer-container" data-testid="visualizer-container" />
 
-      <div className={`hud-layout ${showDiagnostics || holdDiagnosticsLayout ? 'diagnostics-open' : ''}`}>
+
+      <div className={`hud-layout ${showControls ? 'controls-visible' : 'controls-hidden'}`}
+        ref={panelRef}
+        aria-hidden={!showControls}
+        inert={!showControls}
+        onFocusCapture={() => setFocusWithin(true)}
+        onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusWithin(false); }}
+>
         <DiagnosticsMeter
           frame={activeFrame}
           source={activeSource}
           view={view}
-          isVisible={showDiagnostics}
-          onToggle={() => {
-            recordInteraction();
-            setShowDiagnostics((prev) => !prev);
-          }}
-        />
+          isVisible={showControls}
+        >
+          <SpotifyPlayer invoke={invoke} listen={listen} onAttentionChange={setMediaNeedsAttention} />
+        </DiagnosticsMeter>
         <section
-          ref={panelRef}
+          id="hud-visuals-panel"
           className={`idle-panel liquidGlass-wrapper ${showControls ? 'controls-visible' : 'controls-hidden'}`}
           aria-labelledby="app-title"
           aria-hidden={!showControls}
-          onFocusCapture={() => setFocusWithin(true)}
-          onBlurCapture={() => setFocusWithin(false)}
+          inert={!showControls}
         >
         <div className="liquidGlass-effect" aria-hidden="true" />
         <div className="liquidGlass-tint" aria-hidden="true" />
@@ -342,21 +306,6 @@ export default function App({
             <div className="brand-lockup">
               <h1 id="app-title">Spanda</h1>
             </div>
-            <div className="header-right">
-              <Tooltip content="Toggle live audio diagnostics meter" shortcut="D" side="bottom">
-                <button
-                  type="button"
-                  id="toggle-diagnostics"
-                  className={`btn btn-minimal ${showDiagnostics ? 'is-selected' : ''}`}
-                  onClick={() => {
-                    recordInteraction();
-                    setShowDiagnostics((prev) => !prev);
-                  }}
-                >
-                  Diagnostics
-                </button>
-              </Tooltip>
-            </div>
           </header>
 
           <div className="panel-body-grid">
@@ -364,7 +313,6 @@ export default function App({
               view={view}
               client={client.current}
             />
-            <SpotifyPlayer invoke={invoke} listen={listen} />
             <ExperienceControls
               settings={settings}
               onUpdate={updateSettings}
@@ -372,6 +320,7 @@ export default function App({
               onToggleFullscreen={toggleFullscreen}
               onHideControls={handleHideControls}
             />
+
           </div>
 
         </div>
@@ -380,5 +329,3 @@ export default function App({
     </main>
   );
 }
-
-

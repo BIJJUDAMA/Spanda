@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import type { AudioView, UnifiedAnalysisFrame } from '../audio/types';
 import { defaultAnalysisFrame } from '../audio/types';
 
@@ -7,39 +7,31 @@ export interface DiagnosticsMeterProps {
   source?: 'wasapi' | 'idle';
   view?: AudioView;
   isVisible: boolean;
-  onToggle: () => void;
+  children?: ReactNode;
+  mode?: 'full' | 'diagnostics' | 'player';
+  hidden?: boolean;
+}
+
+function amplitudeDb(value: number): number {
+  return Number.isFinite(value) && value > 0 ? 20 * Math.log10(value) : -Infinity;
+}
+
+function formatDb(value: number): string {
+  const db = amplitudeDb(value);
+  return Number.isFinite(db) ? `${db.toFixed(1)} dBFS` : '−∞ dBFS';
 }
 
 export function DiagnosticsMeter({
   frame,
-  source,
   view,
   isVisible,
-  onToggle,
+  children,
+  mode = 'full',
+  hidden = false,
 }: DiagnosticsMeterProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [shouldRender, setShouldRender] = useState(isVisible);
-  const [isClosing, setIsClosing] = useState(false);
-
-  // Smooth open & close animation lifecycle
-  useEffect(() => {
-    let timeoutId: number;
-    if (isVisible) {
-      setShouldRender(true);
-      setIsClosing(false);
-    } else if (shouldRender) {
-      setIsClosing(true);
-      timeoutId = window.setTimeout(() => {
-        setShouldRender(false);
-        setIsClosing(false);
-      }, 220); // Keep the panel mounted through its transform transition.
-    }
-    return () => clearTimeout(timeoutId);
-  }, [isVisible, shouldRender]);
 
   const activeFrame = frame ?? view?.analysis ?? defaultAnalysisFrame;
-  const sourceType = source ?? view?.source ?? 'idle';
-  const activeState = view?.state ?? (sourceType === 'wasapi' ? 'running' : 'idle');
   const formatText = view?.sampleRate
     ? `${view.sampleRate} Hz / ${view.channels} channels`
     : 'Waiting for audio packets';
@@ -51,10 +43,6 @@ export function DiagnosticsMeter({
     (view !== undefined ? view.silent : undefined) ??
     (rmsVal < 0.001);
   const signalText = isSilent ? 'Silence' : 'Audio detected';
-
-  const sessionText = `${view?.generation ?? 0} / ${view?.sequence ?? 0}`;
-
-  const statusText = activeState[0].toUpperCase() + activeState.slice(1);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -86,7 +74,7 @@ export function DiagnosticsMeter({
     const isWaveformSilent =
       waveform.length === 0 ||
       waveform.every((v) => Math.abs(v) < 0.001) ||
-      (rmsVal < 0.001);
+      isSilent;
 
     // Waveform line styling: green/cyan glow
     ctx.shadowBlur = 8;
@@ -96,24 +84,15 @@ export function DiagnosticsMeter({
     ctx.beginPath();
 
     if (isWaveformSilent) {
-      // Synthetic preview: subtle smooth ambient sine wave
-      const points = 64;
-      const step = width / (points - 1);
-      for (let i = 0; i < points; i++) {
-        const x = i * step;
-        const y = midY + Math.sin(i * 0.25) * 3.5;
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-      }
+      ctx.moveTo(0, midY);
+      ctx.lineTo(width, midY);
     } else {
       const len = waveform.length;
       const step = width / Math.max(1, len - 1);
       for (let i = 0; i < len; i++) {
         const x = i * step;
-        const sample = Math.max(-1, Math.min(1, waveform[i] ?? 0));
+        const value = waveform[i] ?? 0;
+        const sample = Number.isFinite(value) ? Math.max(-1, Math.min(1, value)) : 0;
         const y = midY - sample * (midY - 4);
         if (i === 0) {
           ctx.moveTo(x, y);
@@ -125,11 +104,7 @@ export function DiagnosticsMeter({
 
     ctx.stroke();
     ctx.shadowBlur = 0;
-  }, [activeFrame, isVisible, rmsVal]);
-
-  if (!shouldRender) {
-    return null;
-  }
+  }, [activeFrame, isVisible, isSilent]);
 
   const melBands =
     activeFrame.mel && activeFrame.mel.length >= 64
@@ -138,39 +113,20 @@ export function DiagnosticsMeter({
 
   return (
     <section
-      className={`diagnostics-meter-container diagnostics-sidebar ${isClosing ? 'is-closing' : 'is-open'}`}
+      className="diagnostics-meter-container diagnostics-sidebar"
+      data-mode={mode}
+      hidden={hidden}
+      role={mode === 'full' ? undefined : 'tabpanel'}
+      aria-labelledby={mode === 'full' ? undefined : mode === 'player' ? 'hud-tab-spotify' : 'hud-tab-diagnostics'}
       data-testid="diagnostics-meter"
+      id="diagnostics-panel"
       aria-label="Real-time Audio Diagnostics"
     >
-      <header className="diagnostics-meter-header">
-        <div className="diagnostics-meter-title-wrap">
-          <div
-            className={`diagnostics-beat-led ${activeFrame.beat ? 'is-beat' : ''}`}
-            data-testid="beat-flash-indicator"
-            aria-label={activeFrame.beat ? 'Beat flash active' : 'Beat flash inactive'}
-          />
-          <h2 className="diagnostics-meter-title">Diagnostics</h2>
-          <div className="diagnostics-status-wrap">
-            <span className={`status-dot ${activeState}`} aria-hidden="true" />
-            <span className="status-text" role="status">
-              {statusText}
-            </span>
-          </div>
-        </div>
-
-        <div className="diagnostics-meter-header-actions">
-            <button
-              type="button"
-              className="btn btn-minimal btn-sm diagnostics-close-btn"
-              onClick={onToggle}
-              aria-label="Close diagnostics"
-            >
-              ✕
-            </button>
-        </div>
+      <header className="diagnostics-meter-header" hidden={mode === 'player'}>
+        <h2 className="diagnostics-meter-title">Diagnostics</h2>
       </header>
 
-      <div className="diagnostics-visuals-row">
+      <div className="diagnostics-visuals-row" hidden={mode === 'player'}>
         <div className="diagnostics-waveform-wrap">
           <canvas
             ref={canvasRef}
@@ -182,14 +138,16 @@ export function DiagnosticsMeter({
           />
         </div>
 
+        <div className="diagnostics-spectrum">
         <div
           className="diagnostics-bands-grid"
           data-testid="diagnostics-bands"
+          role="img"
           aria-label="64-band equalizer LED bars"
         >
           {melBands.map((val, idx) => {
-            const clamped = Math.max(0, Math.min(1, val));
-            const heightPercent = Math.max(4, Math.round(clamped * 100));
+            const clamped = Number.isFinite(val) ? Math.max(0, Math.min(1, val)) : 0;
+            const heightPercent = clamped * 100;
             return (
               <div
                 key={idx}
@@ -201,9 +159,26 @@ export function DiagnosticsMeter({
             );
           })}
         </div>
+        <div className="diagnostics-frequency-labels" aria-hidden="true"><span>Bass</span><span>Mids</span><span>Treble</span></div>
+        </div>
       </div>
 
-      <div className="diagnostics-telemetry-grid" role="group" aria-label="Audio telemetry">
+      <div className="diagnostics-channel-levels" role="group" aria-label="Channel peak levels" hidden={mode === 'player'}>
+        {([['L', 'Left', activeFrame.leftPeak], ['R', 'Right', activeFrame.rightPeak]] as const).map(([short, name, peak]) => {
+          const db = Math.max(-60, Math.min(0, amplitudeDb(peak)));
+          const reading = formatDb(peak);
+          return <div className="diagnostics-channel" key={short}>
+            <span className="diagnostics-channel-label" aria-hidden="true">{short}</span>
+            <div className="diagnostics-level-track" role="meter" aria-label={`${name} channel peak`} aria-valuemin={-60} aria-valuemax={0} aria-valuenow={db} aria-valuetext={reading}>
+              <div className="diagnostics-level-fill" style={{ width: `${((db + 60) / 60) * 100}%` }} />
+            </div>
+            <span className="diagnostics-channel-value" aria-hidden="true">{reading}</span>
+          </div>;
+        })}
+        <div className="diagnostics-level-scale" aria-hidden="true"><span>−60</span><span>−30</span><span>0 dBFS</span></div>
+      </div>
+
+      <div className="diagnostics-telemetry-grid" role="group" aria-label="Audio telemetry" hidden={mode === 'player'}>
         <div className="diagnostics-telemetry-item diagnostics-stat">
           <span className="telemetry-label stat-label">Format</span>
           <span className="telemetry-value stat-value" data-testid="stat-format">
@@ -213,13 +188,13 @@ export function DiagnosticsMeter({
         <div className="diagnostics-telemetry-item diagnostics-stat">
           <span className="telemetry-label stat-label">RMS</span>
           <span className="telemetry-value stat-value" aria-label="RMS" data-testid="stat-rms">
-            {rmsVal.toFixed(4)}
+            {formatDb(rmsVal)}
           </span>
         </div>
         <div className="diagnostics-telemetry-item diagnostics-stat">
           <span className="telemetry-label stat-label">Peak</span>
           <span className="telemetry-value stat-value" aria-label="Peak" data-testid="stat-peak">
-            {peakVal.toFixed(4)}
+            {formatDb(peakVal)}
           </span>
         </div>
         <div className="diagnostics-telemetry-item diagnostics-stat">
@@ -229,19 +204,13 @@ export function DiagnosticsMeter({
           </span>
         </div>
         <div className="diagnostics-telemetry-item diagnostics-stat">
-          <span className="telemetry-label stat-label">Session</span>
-          <span className="telemetry-value stat-value" data-testid="stat-session">
-            {sessionText}
-          </span>
-        </div>
-        <div className="diagnostics-telemetry-item diagnostics-stat">
           <span className="telemetry-label stat-label">BPM</span>
           <span className="telemetry-value stat-value" data-testid="stat-bpm">
             {activeFrame.bpm > 0 ? Math.round(activeFrame.bpm) : '--'}
           </span>
         </div>
         <div className="diagnostics-telemetry-item diagnostics-stat">
-          <span className="telemetry-label stat-label">Confidence</span>
+          <span className="telemetry-label stat-label">Tempo confidence</span>
           <span className="telemetry-value stat-value" data-testid="stat-confidence">
             {activeFrame.confidence !== undefined
               ? `${Math.round(activeFrame.confidence * 100)}%`
@@ -250,14 +219,15 @@ export function DiagnosticsMeter({
         </div>
       </div>
 
-      <footer className="diagnostics-shortcuts" role="group" aria-label="Keyboard shortcuts">
+      {children && <div className="diagnostics-player-slot" hidden={mode === 'diagnostics'}>{children}</div>}
+
+      <footer className="diagnostics-shortcuts" role="group" aria-label="Keyboard shortcuts" hidden={mode === 'player'}>
         <h3 className="diagnostics-shortcuts-title">Shortcuts</h3>
         <dl className="diagnostics-shortcuts-list">
           <div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Change scene</dd></div>
           <div><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Change color</dd></div>
           <div><dt><kbd>H</kbd></dt><dd>Hide Controls</dd></div>
           <div><dt><kbd>S</kbd></dt><dd>Start / stop audio</dd></div>
-          <div><dt><kbd>D</kbd></dt><dd>Toggle Diagnostics</dd></div>
           <div><dt><kbd>F</kbd> <kbd>F11</kbd></dt><dd>Toggle fullscreen</dd></div>
           <div><dt><kbd>Esc</kbd></dt><dd>Exit fullscreen</dd></div>
         </dl>
