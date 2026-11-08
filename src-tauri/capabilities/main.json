@@ -4,6 +4,8 @@
   "description": "Permissions for main window including full-screen toggle.",
   "windows": ["main"],
   "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
     "core:window:allow-set-fullscreen",
     "core:window:allow-is-fullscreen"
   ]

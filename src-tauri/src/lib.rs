@@ -1,5 +1,23 @@
 pub mod audio;
 mod commands;
+mod media;
+
+/// Read-only diagnostic for validating desktop media discovery in release builds.
+pub fn spotify_diagnostics() -> String {
+    let service = media::MediaService::start(|_| {});
+    for _ in 0..80 {
+        if service.snapshot().revision > 0 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let mut state = service.snapshot();
+    state.artwork = state
+        .artwork
+        .map(|data| format!("{} encoded bytes", data.len()));
+    service.shutdown();
+    format!("{state:#?}\n")
+}
 
 use audio::service::CaptureService;
 use std::sync::{
@@ -20,9 +38,11 @@ fn begin_shutdown(app: &tauri::AppHandle) {
         return;
     }
     let service = app.state::<Arc<CaptureService>>().inner().clone();
+    let media = app.state::<Arc<media::MediaService>>().inner().clone();
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let _ = service.shutdown();
+        media.shutdown();
         shutdown.finished.store(true, Ordering::Release);
         app.exit(0);
     });
@@ -38,7 +58,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::start_capture,
             commands::stop_capture,
-            commands::get_snapshot
+            commands::get_snapshot,
+            media::get_spotify_state,
+            media::control_spotify
         ])
         .setup(move |app| {
             use tauri::Emitter;
@@ -46,6 +68,10 @@ pub fn run() {
             service_clone.set_emitter(move |frame| {
                 let _ = handle.emit("audio_frame", &frame);
             });
+            let handle = app.handle().clone();
+            app.manage(Arc::new(media::MediaService::start(move |state| {
+                let _ = handle.emit("spotify_state", state);
+            })));
             Ok(())
         })
         .on_window_event(|window, event| {
