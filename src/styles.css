@@ -1313,3 +1313,6 @@ fieldset.control-card { min-inline-size: 0; padding-inline: 0; }
     color: var(--foreground);
   }
 }
+
+.sensitivity-reset { border: 0; background: transparent; padding: .2rem 0 .2rem .5rem; font: inherit; font-variant-numeric: tabular-nums; color: var(--foreground); cursor: pointer; }
+.sensitivity-reset:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }

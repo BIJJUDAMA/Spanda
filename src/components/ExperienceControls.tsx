@@ -129,8 +129,13 @@ export function ExperienceControls({
 
         <div className="sensitivity-control control-card">
           <div className="sensitivity-heading">
-            <label htmlFor="sensitivity-range">Response gain</label>
-            <output htmlFor="sensitivity-range">{settings.sensitivity.toFixed(2)}×</output>
+            <label htmlFor="sensitivity-range">Sensitivity</label>
+            <button type="button" className="sensitivity-reset" aria-label="Reset sensitivity to 1.00×"
+              title="Double-click to reset to 1.00×; press Enter when focused"
+              onDoubleClick={() => onUpdate({ sensitivity: 1 })}
+              onClick={event => { if (event.detail === 0) onUpdate({ sensitivity: 1 }); }}>
+              {settings.sensitivity.toFixed(2)}×
+            </button>
           </div>
           <SensitivitySlider
             value={settings.sensitivity}

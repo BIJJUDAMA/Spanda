@@ -120,6 +120,28 @@ describe('ExperienceControls component', () => {
 });
 
 describe('SensitivitySlider pointer interaction', () => {
+  it('double-click resets the slider to 1.00 and cancels outstanding animation', () => {
+    const cancel = vi.fn();
+    const onChange = vi.fn();
+    const { container } = render(<SensitivitySlider value={1.6} onChange={onChange} />);
+    for (const part of container.querySelectorAll('.sensitivity-slider-thumb, .sensitivity-slider-fill')) {
+      Object.defineProperty(part, 'getAnimations', { value: () => [{ cancel }] });
+    }
+    fireEvent.doubleClick(screen.getByRole('slider'));
+    expect(onChange).toHaveBeenCalledWith(1);
+    expect(cancel).toHaveBeenCalledTimes(2);
+  });
+  it('keyboard input interrupts any outstanding thumb and fill glide', () => {
+    const cancel = vi.fn();
+    const onChange = vi.fn();
+    const { container } = render(<SensitivitySlider value={1} onChange={onChange} />);
+    for (const part of container.querySelectorAll('.sensitivity-slider-thumb, .sensitivity-slider-fill')) {
+      Object.defineProperty(part, 'getAnimations', { value: () => [{ cancel }] });
+    }
+    fireEvent.keyDown(screen.getByRole('slider'), { key: 'ArrowRight' });
+    expect(cancel).toHaveBeenCalledTimes(2);
+    expect(onChange).toHaveBeenCalledWith(1.05);
+  });
   it('animates track clicks with a spring and keeps pointer dragging direct', () => {
     const onChange = vi.fn();
     const { container } = render(<SensitivitySlider value={1} onChange={onChange} />);
@@ -145,7 +167,7 @@ describe('SensitivitySlider pointer interaction', () => {
     ]), expect.objectContaining({ duration: 360, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' }));
 
     fireEvent.pointerMove(slider, { pointerId: 1, clientX: 148 });
-    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledTimes(2);
     fireEvent.pointerMove(slider, { pointerId: 1, clientX: 150 });
     expect(onChange).toHaveBeenLastCalledWith(1.55);
     fireEvent.pointerMove(slider, { pointerId: 1, clientX: 100 });
@@ -154,3 +176,16 @@ describe('SensitivitySlider pointer interaction', () => {
   });
 });
 
+it('double-clicking the sensitivity value resets it, with keyboard activation available', () => {
+  const onUpdate = vi.fn();
+  render(<ExperienceControls settings={{ ...initialExperienceSettings, sensitivity: 1.6 }} onUpdate={onUpdate}
+    isFullscreen={false} onToggleFullscreen={vi.fn()} onHideControls={vi.fn()} />);
+  const reset = screen.getByRole('button', { name: 'Reset sensitivity to 1.00×' });
+  fireEvent.click(reset, { detail: 1 });
+  expect(onUpdate).not.toHaveBeenCalled();
+  fireEvent.doubleClick(reset);
+  expect(onUpdate).toHaveBeenLastCalledWith({ sensitivity: 1 });
+  onUpdate.mockClear();
+  fireEvent.click(reset, { detail: 0 });
+  expect(onUpdate).toHaveBeenCalledWith({ sensitivity: 1 });
+});

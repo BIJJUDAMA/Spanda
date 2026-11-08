@@ -253,7 +253,7 @@ test('HUD stays visible while hovered or dragging, then hides after release and 
 
 test('gain slider keys adjust gain without changing the scene or palette', () => {
   render(<App invoke={() => new Promise(() => {})} />);
-  const gain = screen.getByRole('slider', { name: 'Response gain' });
+  const gain = screen.getByRole('slider', { name: 'Sensitivity' });
   fireEvent.keyDown(gain, { key: 'ArrowRight' });
   expect(gain).toHaveAttribute('aria-valuenow', '1.05');
   expect(screen.getByLabelText('Scene selector')).toHaveValue('oscilloscope');
