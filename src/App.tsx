@@ -22,6 +22,7 @@ import { createSettingsStore, type ExperienceSettings } from './experience/setti
 import { nextControlsVisibility } from './experience/visibility';
 import { useCompactHud } from './experience/compact';
 import { useHudFit } from './experience/hud-fit';
+import { useSelectedHudTab } from './experience/selected-tab';
 import { useTabMotion } from './experience/tab-motion';
 import { VisualEngine } from './visualizers/engine';
 import type { Palette } from './visualizers/types';
@@ -50,7 +51,7 @@ export default function App({
   const [manuallyHidden, setManuallyHidden] = useState<boolean>(false);
   const compact = useCompactHud();
   useHudFit(panelRef, compact);
-  const [compactPanel, setCompactPanel] = useState<'visuals' | 'spotify' | 'diagnostics'>('visuals');
+  const [compactPanel, setCompactPanel] = useSelectedHudTab();
   const prepareTabMotion = useTabMotion(panelRef, compact, compactPanel);
   const selectCompactPanel = (panel: typeof compactPanel) => {
     if (panel === compactPanel) return;
