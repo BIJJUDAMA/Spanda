@@ -59,20 +59,33 @@ export function CustomSelect({
         setIsOpen(false);
       }
     }
+    function handleDismissKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setIsOpen(false);
+      } else if (['h', 's'].includes(event.key.toLowerCase())) {
+        setIsOpen(false);
+      }
+    }
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleDismissKey);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleDismissKey);
     };
   }, [isOpen]);
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (['Enter', ' ', 'Escape', 'ArrowDown', 'ArrowUp'].includes(e.key)) e.stopPropagation();
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       handleToggle();
     } else if (e.key === 'Escape') {
+      e.preventDefault();
       setIsOpen(false);
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -128,6 +141,7 @@ export function CustomSelect({
         onKeyDown={handleKeyDown}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
+        aria-controls={`${id}-options`}
       >
         <span className="selected-value-label">{selectedOption?.label}</span>
         <ChevronDown className={cn('select-chevron', isOpen && 'rotate-180')} size={14} />
@@ -141,6 +155,9 @@ export function CustomSelect({
             isOpen ? 'is-open' : 'is-closing'
           )}
           role="listbox"
+          id={`${id}-options`}
+          aria-hidden={!isOpen}
+          inert={!isOpen}
           aria-label={ariaLabel}
         >
           <div className="custom-select-popover-glass" aria-hidden="true" />

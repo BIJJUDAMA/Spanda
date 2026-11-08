@@ -231,10 +231,87 @@ test('has no local-file controls and ignores dropped audio and playback shortcut
   expect(screen.getByRole('button', { name: 'Stop' })).toBeDisabled();
 });
 
+test('HUD stays visible while hovered or dragging, then hides after release and idle', () => {
+  vi.useFakeTimers();
+  try {
+    const { container } = render(<App invoke={() => new Promise(() => {})} />);
+    const layout = container.querySelector('.hud-layout')!;
+    const panel = container.querySelector('.idle-panel')!;
+    fireEvent.pointerEnter(layout);
+    act(() => vi.advanceTimersByTime(2000));
+    expect(panel).toHaveClass('controls-visible');
+    fireEvent.pointerDown(panel);
+    fireEvent.pointerLeave(layout);
+    act(() => vi.advanceTimersByTime(2000));
+    expect(panel).toHaveClass('controls-visible');
+    fireEvent.pointerUp(window);
+    act(() => vi.advanceTimersByTime(1100));
+    expect(panel).toHaveClass('controls-hidden');
+    expect(panel).toHaveAttribute('inert');
+  } finally { vi.useRealTimers(); }
+});
+
+test('gain slider keys adjust gain without changing the scene or palette', () => {
+  render(<App invoke={() => new Promise(() => {})} />);
+  const gain = screen.getByRole('slider', { name: 'Response gain' });
+  fireEvent.keyDown(gain, { key: 'ArrowRight' });
+  expect(gain).toHaveAttribute('aria-valuenow', '1.05');
+  expect(screen.getByLabelText('Scene selector')).toHaveValue('oscilloscope');
+  fireEvent.keyDown(gain, { key: 'ArrowUp' });
+  expect(screen.getByRole('button', { name: 'Palette Aurora' })).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('showing the HUD returns Diagnostics immediately without a separate timer', () => {
   const { container } = render(<App invoke={() => new Promise(() => {})} />);
   fireEvent.keyDown(window, { key: 'h' });
   fireEvent.mouseMove(window);
   expect(container.querySelector('.hud-layout')).toHaveClass('controls-visible');
   expect(screen.getByTestId('diagnostics-meter')).not.toHaveClass('is-closing');
+});
+
+test('mouse use of the scene control releases focus so arrow hotkeys keep changing scenes', () => {
+  render(<App invoke={() => new Promise(() => {})} />);
+  const trigger = screen.getByRole('button', { name: 'Scene' });
+  trigger.focus();
+  fireEvent.pointerDown(trigger, { button: 0 });
+  fireEvent.click(trigger);
+  const option = screen.getByRole('option', { name: 'Geometric Tunnel' });
+  fireEvent.pointerDown(option, { button: 0 });
+  fireEvent.click(option);
+  fireEvent.pointerUp(window);
+  expect(trigger).not.toHaveFocus();
+  fireEvent.keyDown(window, { key: 'ArrowRight' });
+  expect(screen.getByTestId('scene-select')).toHaveValue('bars');
+});
+
+test('H and S remain available after focusing or clicking a HUD button', () => {
+  const invoke = vi.fn<Invoke>(() => new Promise(() => {}));
+  const { container } = render(<App invoke={invoke} />);
+  const palette = screen.getByRole('button', { name: 'Palette Cosmic' });
+  palette.focus();
+  fireEvent.keyDown(palette, { key: 'd' });
+  expect(screen.getByTestId('diagnostics-meter')).toBeInTheDocument();
+  fireEvent.pointerDown(palette, { button: 0 });
+  fireEvent.click(palette);
+  fireEvent.pointerUp(window);
+  expect(palette).not.toHaveFocus();
+  fireEvent.keyDown(window, { key: 's' });
+  expect(invoke).toHaveBeenCalledWith('start_capture');
+  fireEvent.keyDown(window, { key: 'd' });
+  fireEvent.keyDown(window, { key: 'h' });
+  expect(container.querySelector('.idle-panel')).toHaveClass('controls-hidden');
+});
+
+test('deliberate keyboard navigation still operates the scene menu', () => {
+  const { container } = render(<App invoke={() => new Promise(() => {})} />);
+  const trigger = screen.getByRole('button', { name: 'Scene' });
+  fireEvent.keyDown(container.querySelector('.hud-layout')!, { key: 'Tab' });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  expect(trigger).toHaveFocus();
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+  expect(screen.getByTestId('scene-select')).toHaveValue('tunnel');
+  fireEvent.keyDown(trigger, { key: 'Escape' });
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
 });

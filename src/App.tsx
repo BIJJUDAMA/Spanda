@@ -40,6 +40,8 @@ export default function App({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [focusWithin, setFocusWithin] = useState<boolean>(false);
+  const [pointerWithin, setPointerWithin] = useState(false);
+  const [pointerActive, setPointerActive] = useState(false);
   const [mediaNeedsAttention, setMediaNeedsAttention] = useState(false);
   const [manuallyHidden, setManuallyHidden] = useState<boolean>(false);
   const lastInteractionRef = useRef<number>(Date.now());
@@ -100,13 +102,15 @@ export default function App({
   // Handle Escape key, H key, and mouse interactions
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
+      if (e.defaultPrevented) return;
+      const target = e.target instanceof HTMLElement ? e.target : null;
       const isInput =
         target &&
         (target.tagName === 'INPUT' ||
           target.tagName === 'TEXTAREA' ||
           target.tagName === 'SELECT' ||
-          target.isContentEditable);
+          target.isContentEditable ||
+          target.closest('[role="slider"], [role="listbox"], [role="tablist"], [aria-haspopup="listbox"]'));
 
       if (e.key === 'Escape' && isFullscreen) {
         recordInteraction();
@@ -116,7 +120,7 @@ export default function App({
 
       if (isInput) return;
 
-      if ((e.key === 'h' || e.key === 'H') && !focusWithin) {
+      if (e.key === 'h' || e.key === 'H') {
         if (!manuallyHidden) {
           handleHideControls();
         } else {
@@ -124,7 +128,7 @@ export default function App({
         }
         return;
       }
-      if ((e.key === 's' || e.key === 'S') && !focusWithin) {
+      if (e.key === 's' || e.key === 'S') {
         recordInteraction();
         const isCapturing = ['starting', 'running', 'recovering'].includes(view.state);
         if (isCapturing) {
@@ -172,14 +176,26 @@ export default function App({
     };
     const onMouseMove = () => recordInteraction();
     const onPointerDown = () => recordInteraction();
+    const onPointerEnd = () => {
+      setPointerActive(false);
+      lastInteractionRef.current = Date.now();
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && panelRef.current?.contains(focused)
+          && focused.matches('button, input[type="range"], [role="slider"]')) focused.blur();
+    };
+
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointerup', onPointerEnd);
+    window.addEventListener('pointercancel', onPointerEnd);
 
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointerup', onPointerEnd);
+      window.removeEventListener('pointercancel', onPointerEnd);
     };
   }, [
     focusWithin,
@@ -199,7 +215,7 @@ export default function App({
       const isVisible = nextControlsVisibility({
         nowMs: Date.now(),
         lastInteractionMs: lastInteractionRef.current,
-        focusWithin: focusWithin || view.pending,
+        focusWithin: focusWithin || pointerWithin || pointerActive || view.pending,
         menuOpen: false,
         hasError: Boolean(view.error || view.clientError || mediaNeedsAttention),
       });
@@ -212,7 +228,7 @@ export default function App({
     }, 100);
 
     return () => clearInterval(timer);
-  }, [focusWithin, view.pending, mediaNeedsAttention, manuallyHidden, view.error, view.clientError, handleHideControls]);
+  }, [focusWithin, pointerWithin, pointerActive, view.pending, mediaNeedsAttention, manuallyHidden, view.error, view.clientError, handleHideControls]);
 
   // Audio and Visual Engine Initialization
   useEffect(() => {
@@ -282,7 +298,17 @@ export default function App({
         inert={!showControls}
         onFocusCapture={() => setFocusWithin(true)}
         onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusWithin(false); }}
->
+        onPointerEnter={() => { setPointerWithin(true); recordInteraction(); }}
+        onPointerLeave={() => { setPointerWithin(false); lastInteractionRef.current = Date.now(); }}
+        onPointerDownCapture={(event) => {
+          setPointerActive(true);
+          event.currentTarget.dataset.inputModality = 'pointer';
+          const focused = document.activeElement;
+          if (focused instanceof HTMLElement && event.currentTarget.contains(focused)) focused.blur();
+          const target = event.target instanceof Element ? event.target : null;
+          if (target?.closest('button, [role="slider"], [role="option"]')) event.preventDefault();
+        }}
+        onKeyDownCapture={(event) => { if (event.key === 'Tab') event.currentTarget.dataset.inputModality = 'keyboard'; }}>
         <DiagnosticsMeter
           frame={activeFrame}
           source={activeSource}

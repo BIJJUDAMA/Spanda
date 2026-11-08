@@ -1290,3 +1290,26 @@ fieldset.control-card { min-inline-size: 0; padding-inline: 0; }
 .spotify-player button:focus-visible, .spotify-timeline input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 .capture-guidance { margin: .35rem 0 0; min-height: 1.25em; color: var(--muted-foreground); font-size: .7rem; line-height: 1.4; }
+
+/* HUD controls acknowledge contact without shifting their hit targets. */
+.hud-layout :is(.btn, .ui-btn, .custom-select-trigger, .palette-swatch, .choice-button) {
+  transform: none;
+  touch-action: manipulation;
+  transition-property: background-color, border-color, color, box-shadow, opacity;
+  transition-duration: 120ms;
+  transition-timing-function: ease;
+}
+.hud-layout[data-input-modality="pointer"] :focus { outline: none; }
+.hud-layout :is(.btn, .ui-btn, .custom-select-trigger, .palette-swatch, .choice-button):active:enabled {
+  transform: none;
+  transition-duration: 0ms;
+  background-color: rgba(255,255,255,.16);
+  border-color: rgba(255,255,255,.5);
+}
+@media (hover: hover) and (pointer: fine) {
+  .hud-layout :is(.palette-swatch, .choice-button):not(.is-selected):hover {
+    background-color: rgba(255,255,255,.08);
+    border-color: rgba(255,255,255,.25);
+    color: var(--foreground);
+  }
+}

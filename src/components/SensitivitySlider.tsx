@@ -6,7 +6,6 @@ const MAX = 2;
 const STEP = 0.05;
 const GLIDE_DURATION_MS = 360;
 const GLIDE_EASING = 'cubic-bezier(0.23, 1, 0.32, 1)';
-const DRAG_START_THRESHOLD_PX = 4;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -42,8 +41,6 @@ export function SensitivitySlider({ value, onChange }: SensitivitySliderProps) {
   const dragRef = useRef<{
     pointerId: number;
     offsetX: number;
-    startX: number;
-    isDragging: boolean;
   } | null>(null);
   const currentValue = quantize(value);
   const progress = valueToProgress(currentValue);
@@ -69,13 +66,14 @@ export function SensitivitySlider({ value, onChange }: SensitivitySliderProps) {
     const from = rect ? clamp((thumbRect.left + thumbRect.width / 2 - rect.left - 8) / travel, 0, 1) : progress;
     const fillRect = fill.getBoundingClientRect();
     const fromFill = rect ? clamp(fillRect.width / rect.width, 0, 1) : progress;
-    thumb.getAnimations().forEach((animation) => animation.cancel());
-    fill.getAnimations().forEach((animation) => animation.cancel());
+    thumb.getAnimations?.().forEach((animation) => animation.cancel());
+    fill.getAnimations?.().forEach((animation) => animation.cancel());
     const options: KeyframeAnimationOptions = { duration: GLIDE_DURATION_MS, fill: 'none', easing: GLIDE_EASING };
+    const targetOffset = (0.5 - targetProgress) * 16;
     thumb.animate(
       [
-        { transform: `translateX(calc(-50% + ${(from - 0.5) * travel}px)) translateY(-50%)` },
-        { transform: `translateX(calc(-50% + ${(targetProgress - 0.5) * travel}px)) translateY(-50%)` },
+        { transform: `translateX(calc(-50% + ${targetOffset + (from - targetProgress) * travel}px)) translateY(-50%)` },
+        { transform: `translateX(calc(-50% + ${targetOffset}px)) translateY(-50%)` },
       ],
       options
     );
@@ -94,23 +92,22 @@ export function SensitivitySlider({ value, onChange }: SensitivitySliderProps) {
     const rect = track.getBoundingClientRect();
     if (rect.width <= 0) return;
     event.preventDefault();
-    track.focus();
+    track.dataset.pointerFocus = 'true';
     const thumb = thumbRef.current;
-    const clickedThumb = Boolean(thumb && (event.target === thumb || thumb.contains(event.target as Node)));
     const travel = Math.max(0, rect.width - 16);
-    const thumbCenter = rect.left + 8 + progress * travel;
+    const thumbRect = thumb?.getBoundingClientRect();
+    const thumbCenter = thumbRect && thumbRect.width > 0 ? thumbRect.left + thumbRect.width / 2 : rect.left + 8 + progress * travel;
+    const clickedThumb = Math.abs(event.clientX - thumbCenter) <= 10;
     const offsetX = clickedThumb ? event.clientX - thumbCenter : 0;
     dragRef.current = {
       pointerId: event.pointerId,
       offsetX,
-      startX: event.clientX,
-      isDragging: clickedThumb,
     };
     track.setPointerCapture?.(event.pointerId);
 
     if (clickedThumb) {
-      thumb?.getAnimations().forEach((animation) => animation.cancel());
-      fillRef.current?.getAnimations().forEach((animation) => animation.cancel());
+      thumb?.getAnimations?.().forEach((animation) => animation.cancel());
+      fillRef.current?.getAnimations?.().forEach((animation) => animation.cancel());
     } else {
       const targetProgress = valueToProgress(progressToValue((event.clientX - rect.left - 8) / travel));
       animateToProgress(targetProgress, rect.width);
@@ -121,12 +118,8 @@ export function SensitivitySlider({ value, onChange }: SensitivitySliderProps) {
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    if (!drag.isDragging) {
-      if (Math.abs(event.clientX - drag.startX) < DRAG_START_THRESHOLD_PX) return;
-      drag.isDragging = true;
-    }
-    thumbRef.current?.getAnimations().forEach((animation) => animation.cancel());
-    fillRef.current?.getAnimations().forEach((animation) => animation.cancel());
+    thumbRef.current?.getAnimations?.().forEach((animation) => animation.cancel());
+    fillRef.current?.getAnimations?.().forEach((animation) => animation.cancel());
     applyPointerValue(event.clientX, drag.offsetX);
   };
 
@@ -137,6 +130,7 @@ export function SensitivitySlider({ value, onChange }: SensitivitySliderProps) {
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    delete event.currentTarget.dataset.pointerFocus;
     let next: number | undefined;
     if (event.key === 'ArrowRight' || event.key === 'ArrowUp') next = currentValue + STEP;
     if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') next = currentValue - STEP;
@@ -145,15 +139,20 @@ export function SensitivitySlider({ value, onChange }: SensitivitySliderProps) {
     if (event.key === 'Home') next = MIN;
     if (event.key === 'End') next = MAX;
     if (next !== undefined) {
+      dragRef.current = null;
       event.preventDefault();
+      event.stopPropagation();
+      thumbRef.current?.getAnimations?.().forEach((animation) => animation.cancel());
+      fillRef.current?.getAnimations?.().forEach((animation) => animation.cancel());
       onChange(quantize(next));
     }
   };
-  const thumbOffset = (progress - 0.5) * Math.max(0, (trackRef.current?.clientWidth ?? 16) - 16);
+  const thumbOffset = (0.5 - progress) * 16;
 
   return (
     <div
       ref={trackRef}
+      id="sensitivity-range"
       className="sensitivity-slider"
       role="slider"
       tabIndex={0}
@@ -162,11 +161,20 @@ export function SensitivitySlider({ value, onChange }: SensitivitySliderProps) {
       aria-valuemax={MAX}
       aria-valuenow={currentValue}
       aria-valuetext={`${currentValue.toFixed(2)}×`}
+      title="Double-click to reset sensitivity to 1.00×"
+      onDoubleClick={() => {
+        dragRef.current = null;
+        thumbRef.current?.getAnimations?.().forEach(animation => animation.cancel());
+        fillRef.current?.getAnimations?.().forEach(animation => animation.cancel());
+        onChange(CENTER);
+      }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerEnd}
+      onLostPointerCapture={() => { dragRef.current = null; }}
       onKeyDown={handleKeyDown}
+      onBlur={(event) => { delete event.currentTarget.dataset.pointerFocus; }}
     >
       <span className="sensitivity-slider-track" aria-hidden="true" />
       <span
@@ -178,7 +186,7 @@ export function SensitivitySlider({ value, onChange }: SensitivitySliderProps) {
       <span
         ref={thumbRef}
         className="sensitivity-slider-thumb"
-        style={{ transform: `translateX(calc(-50% + ${thumbOffset}px)) translateY(-50%)` }}
+        style={{ left: `${progress * 100}%`, transform: `translateX(calc(-50% + ${thumbOffset}px)) translateY(-50%)` }}
         aria-hidden="true"
       />
     </div>
