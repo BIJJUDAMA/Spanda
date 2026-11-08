@@ -62,6 +62,7 @@ export type Palette =
 export type Quality = 'low' | 'medium' | 'high';
 
 export interface VisualSettings {
+  typographyText?: string;
   response: ResponseStyle;
   palette: Palette;
   sensitivity: number;

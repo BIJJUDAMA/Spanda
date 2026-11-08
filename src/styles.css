@@ -1316,3 +1316,7 @@ fieldset.control-card { min-inline-size: 0; padding-inline: 0; }
 
 .sensitivity-reset { border: 0; background: transparent; padding: .2rem 0 .2rem .5rem; font: inherit; font-variant-numeric: tabular-nums; color: var(--foreground); cursor: pointer; }
 .sensitivity-reset:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }
+
+.typography-control input { color: var(--foreground); background: rgba(255,255,255,.06); border: 1px solid var(--border); border-radius: 6px; padding: .3rem .4rem; font: inherit; }
+.typography-control input { width: 100%; user-select: text; }
+.typography-control { grid-column: 1 / -1; }

@@ -1,3 +1,4 @@
+import { SCENE_OPTIONS } from '../visualizers/catalog';
 import type { Palette, Quality, ResponseStyle } from '../visualizers/types';
 import type { ExperienceSettings } from '../experience/settings';
 import { CustomSelect } from './ui/custom-select';
@@ -12,14 +13,7 @@ export interface ExperienceControlsProps {
   onHideControls: () => void;
 }
 
-export const SCENE_OPTIONS = [
-  { value: 'oscilloscope', label: 'Oscilloscope' },
-  { value: 'tunnel', label: 'Geometric Tunnel' },
-  { value: 'bars', label: 'Spectrum Bars' },
-  { value: 'particle-sphere', label: 'Particle Sphere' },
-];
-
-
+export { SCENE_OPTIONS } from '../visualizers/catalog';
 
 export const PALETTE_OPTIONS: { value: Palette; label: string; colors: [string, string, string] }[] = [
   { value: 'aurora', label: 'Aurora', colors: ['#19e573', '#1ab3e6', '#a94be8'] },
@@ -67,6 +61,12 @@ export function ExperienceControls({
           </Tooltip>
         </div>
 
+        {settings.sceneId === 'typography' && <div className="typography-control control-card">
+          <label htmlFor="typography-text">Your words</label>
+          <input id="typography-text" type="text" autoComplete="off" spellCheck={false} autoCorrect="off" autoCapitalize="off"
+            maxLength={48} value={settings.typographyText ?? 'SPANDA'}
+            onChange={event => onUpdate({ typographyText: event.target.value })} />
+        </div>}
         <fieldset className="palette-control control-card">
           <legend>Palette</legend>
           <div className="palette-swatches" role="group" aria-label="Color palette">
