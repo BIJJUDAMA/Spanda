@@ -24,7 +24,13 @@ export class VisualEngine {
   public isRunning: boolean = false;
   public isContextLost: boolean = false;
 
+  private frameListeners = new Set<(canvas: HTMLCanvasElement, timeMs: number) => void>();
   private transition: { target: THREE.WebGLRenderTarget; scene: THREE.Scene; camera: THREE.Camera; material: THREE.ShaderMaterial; geometry: THREE.PlaneGeometry; elapsed: number } | null = null;
+
+  public subscribeFrame(listener: (canvas: HTMLCanvasElement, timeMs: number) => void) {
+    this.frameListeners.add(listener);
+    return () => { this.frameListeners.delete(listener); };
+  }
 
   private clearTransition() {
     if (!this.transition) return;
@@ -225,6 +231,7 @@ export class VisualEngine {
         this.renderer.autoClear = true;
         if (progress >= 1) this.clearTransition();
       }
+      this.frameListeners.forEach(listener => listener(this.renderer.domElement, timeMs));
       this.animId = requestAnimationFrame(loop);
     };
 
@@ -242,6 +249,7 @@ export class VisualEngine {
   public dispose(): void {
     this.stop();
     this.clearTransition();
+    this.frameListeners.clear();
     if (this.renderer.domElement) {
       this.renderer.domElement.removeEventListener('webglcontextlost', this.handleContextLost);
       this.renderer.domElement.removeEventListener('webglcontextrestored', this.handleContextRestored);

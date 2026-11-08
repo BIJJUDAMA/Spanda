@@ -1,3 +1,5 @@
+import { ClipRecorder, idleRecording, type RecordingState } from './recording/recorder';
+import { RecordingControls } from './components/RecordingControls';
 import { useSceneRotation } from './experience/rotation';
 import { RotationControls } from './components/RotationControls';
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -36,6 +38,8 @@ export default function App({
   invoke?: Invoke;
   listen?: Listen;
 }) {
+  const recorderRef = useRef<ClipRecorder | null>(null);
+  const [recording, setRecording] = useState<RecordingState>(idleRecording);
   const client = useRef<AudioClient | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -59,6 +63,21 @@ export default function App({
     if (panel === compactPanel) return;
     prepareTabMotion();
     setCompactPanel(panel);
+  };
+
+  useEffect(() => {
+    if (view.state !== 'running' && recording.phase === 'recording') void recorderRef.current?.stop();
+  }, [view.state, recording.phase]);
+  useEffect(() => () => recorderRef.current?.dispose(), []);
+  const startRecording = () => {
+    if (!engineRef.current) { setRecording({ phase: 'error', elapsed: 0, message: 'The visualizer is unavailable. Restart Spanda and try again.' }); return; }
+    recorderRef.current?.dispose();
+    const recorder = new ClipRecorder(engineRef.current, state => {
+      setRecording(state);
+      if (state.phase === 'saved' || state.phase === 'error') recordInteraction();
+    });
+    recorderRef.current = recorder;
+    void recorder.start();
   };
 
   const lastInteractionRef = useRef<number>(Date.now());
@@ -237,7 +256,7 @@ export default function App({
         lastInteractionMs: lastInteractionRef.current,
         focusWithin: focusWithin || pointerWithin || pointerActive || view.pending,
         menuOpen: false,
-        hasError: Boolean(view.error || view.clientError || mediaNeedsAttention),
+        hasError: Boolean(view.error || view.clientError || mediaNeedsAttention || recording.phase === 'error' || recording.phase === 'saving'),
       });
       if (!isVisible && typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('dismiss-tooltips'));
@@ -248,7 +267,7 @@ export default function App({
     }, 100);
 
     return () => clearInterval(timer);
-  }, [focusWithin, pointerWithin, pointerActive, view.pending, mediaNeedsAttention, manuallyHidden, view.error, view.clientError, handleHideControls]);
+  }, [focusWithin, pointerWithin, pointerActive, view.pending, mediaNeedsAttention, recording.phase, manuallyHidden, view.error, view.clientError, handleHideControls]);
 
   // Audio and Visual Engine Initialization
   useEffect(() => {
@@ -310,7 +329,9 @@ export default function App({
   return (
     <main className="app">
       <div ref={containerRef} className="visualizer-container" data-testid="visualizer-container" />
-
+      {!showControls && recording.phase === 'recording' && <button type="button" className="recording-badge" onClick={() => { recordInteraction(); void recorderRef.current?.stop(); }} aria-label="Stop and save recording">
+        <span className="recording-status-dot" aria-hidden="true" /> Recording
+      </button>}
 
       <div className={`hud-layout ${showControls ? 'controls-visible' : 'controls-hidden'}`}
         data-compact={compact}
@@ -390,7 +411,7 @@ export default function App({
               compact={compact}
             />
             <div className="hud-session-controls"><RotationControls rotation={rotation} />
-            </div>
+            <RecordingControls state={recording} captureRunning={view.state === 'running'} onStart={startRecording} onStop={() => { void recorderRef.current?.stop(); }} /></div>
           </div>
 
         </div>

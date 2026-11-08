@@ -1433,20 +1433,26 @@ fieldset.control-card { min-inline-size: 0; padding-inline: 0; }
 
 .scene-shortcut-hint { display: block; width: 100%; }
 
-/* Keep both columns at their natural height, then fit the complete HUD as one surface. */
-.hud-layout[data-compact="false"] {
-  max-height: none;
-  zoom: var(--hud-fit-scale, 1);
-}
-
 .rotation-controls, .recording-controls { border-top: 1px solid var(--border); padding-top: .4rem; }
 .rotation-heading, .recording-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; font-size: .8rem; }
+.typography-control input { color: var(--foreground); background: rgba(255,255,255,.06); border: 1px solid var(--border); border-radius: 6px; padding: .3rem .4rem; font: inherit; }
+.typography-control input { width: 100%; user-select: text; }
+.typography-control { grid-column: 1 / -1; }
+.recording-note, .recording-result { margin: .3rem 0 0; font-size: .65rem; color: var(--muted-foreground); }
+.recording-result { overflow-wrap: anywhere; user-select: text; }
+.recording-heading .btn { padding: .35rem .65rem; font-size: .75rem; }
 .rotation-controls { position: relative; }
 @media (max-height: 760px) {
   .rotation-controls, .recording-controls { padding-top: .2rem; }
   .recording-note { font-size: .6rem; }
   .hud-layout[data-compact="true"] .hud-brand-banner { max-height: 40px; }
 }
+.recording-badge { position: fixed; top: 1rem; right: 1rem; z-index: 50; border: 1px solid rgba(255,255,255,.22); border-radius: 7px; padding: .5rem .75rem; background: rgba(20,20,24,.9); color: var(--foreground); font: inherit; font-size: .75rem; cursor: pointer; pointer-events: auto; }
+.recording-status-dot { display: inline-block; width: .45rem; height: .45rem; border-radius: 50%; background: #ff7373; margin-right: .3rem; vertical-align: middle; }
+.recording-badge:hover { background: rgba(50,35,38,.95); }
+.hud-session-controls { display: grid; grid-template-columns: minmax(0,.8fr) minmax(0,1.2fr); gap: .7rem; }
+.recording-heading { flex-wrap: wrap; }
+.hud-layout[data-compact="true"] .hud-session-controls { gap: .5rem; }
 @media (max-height: 520px) {
   .hud-layout[data-compact="true"] { zoom: .8; max-height: calc((100dvh - 1rem) / .8); }
   .hud-layout[data-compact="true"] .panel-header { display: none; }
@@ -1486,3 +1492,10 @@ fieldset.control-card { min-inline-size: 0; padding-inline: 0; }
 .rotation-panel-note { margin: .5rem 0 0; color: var(--muted-foreground); font-size: .65rem; }
 .rotation-controls button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .rotation-controls *, .rotation-scene-panel[data-open="true"] { transition: none; } }
+
+
+/* Keep both columns at their natural height, then fit the complete HUD as one surface. */
+.hud-layout[data-compact="false"] {
+  max-height: none;
+  zoom: var(--hud-fit-scale, 1);
+}
