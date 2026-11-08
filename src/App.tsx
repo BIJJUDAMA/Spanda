@@ -1,3 +1,5 @@
+import { useSceneRotation } from './experience/rotation';
+import { RotationControls } from './components/RotationControls';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { invoke as desktopInvoke } from '@tauri-apps/api/core';
 import { listen as desktopListen } from '@tauri-apps/api/event';
@@ -113,6 +115,9 @@ export default function App({
       engineRef.current.setScene(partial.sceneId);
     }
   }, []);
+
+  const rotateScene = useCallback((sceneId: string) => updateSettings({ sceneId }), [updateSettings]);
+  const rotation = useSceneRotation(settings.sceneId, rotateScene, SCENE_OPTIONS.map(scene => scene.value));
 
   // Handle Escape key, H key, and mouse interactions
   useEffect(() => {
@@ -384,7 +389,8 @@ export default function App({
               onHideControls={handleHideControls}
               compact={compact}
             />
-
+            <div className="hud-session-controls"><RotationControls rotation={rotation} />
+            </div>
           </div>
 
         </div>

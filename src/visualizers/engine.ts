@@ -24,6 +24,40 @@ export class VisualEngine {
   public isRunning: boolean = false;
   public isContextLost: boolean = false;
 
+  private transition: { target: THREE.WebGLRenderTarget; scene: THREE.Scene; camera: THREE.Camera; material: THREE.ShaderMaterial; geometry: THREE.PlaneGeometry; elapsed: number } | null = null;
+
+  private clearTransition() {
+    if (!this.transition) return;
+    this.transition.target.dispose(); this.transition.material.dispose(); this.transition.geometry.dispose();
+    this.transition = null;
+  }
+
+  private beginTransition() {
+    if (this.customRenderer || this.isContextLost || !this.activeScene?.scene || !this.activeScene.camera || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      this.clearTransition(); return;
+    }
+    const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    const target = new THREE.WebGLRenderTarget(size.x, size.y, { depthBuffer: false });
+    this.renderer.setRenderTarget(target);
+    this.renderer.render(this.activeScene.scene, this.activeScene.camera);
+    if (this.transition) {
+      this.renderer.autoClear = false;
+      this.renderer.render(this.transition.scene, this.transition.camera);
+      this.renderer.autoClear = true;
+    }
+    this.renderer.setRenderTarget(null);
+    this.clearTransition();
+    const material = new THREE.ShaderMaterial({
+      uniforms: { uMap: { value: target.texture }, uOpacity: { value: 1 } },
+      vertexShader: 'varying vec2 vUv; void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',
+      fragmentShader: 'varying vec2 vUv; uniform sampler2D uMap; uniform float uOpacity; void main(){gl_FragColor=vec4(texture2D(uMap,vUv).rgb,uOpacity);}',
+      transparent: true, depthTest: false, depthWrite: false,
+    });
+    const scene = new THREE.Scene(), geometry = new THREE.PlaneGeometry(2, 2);
+    scene.add(new THREE.Mesh(geometry, material));
+    this.transition = { target, scene, geometry, material, camera: new THREE.Camera(), elapsed: 0 };
+  }
+
   private dummyScene: THREE.Scene = new THREE.Scene();
   private dummyCamera: THREE.PerspectiveCamera = new THREE.PerspectiveCamera();
   private container: HTMLElement;
@@ -38,6 +72,7 @@ export class VisualEngine {
   private handleContextLost = (e: Event) => {
     e.preventDefault();
     this.isContextLost = true;
+    this.clearTransition();
     if (this.postManager) {
       this.postManager.dispose();
       this.postManager = null;
@@ -98,6 +133,7 @@ export class VisualEngine {
   }
 
   public setScene(id: string): void {
+    this.beginTransition();
     if (this.activeScene) {
       this.activeScene.dispose();
       this.activeScene = null;
@@ -108,13 +144,17 @@ export class VisualEngine {
       this.postManager.setSceneProfile(id);
       this.postManager.setSceneAndCamera(this.activeScene.scene, this.activeScene.camera);
     }
+    const transition = this.transition;
+    this.transition = null;
     this.resize();
+    this.transition = transition;
     if (!this.isRunning && !this.isContextLost) {
       this.start();
     }
   }
 
   public resize(): void {
+    this.clearTransition();
     const width = this.container.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 800) || 800;
     const height = this.container.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 600) || 600;
 
@@ -176,6 +216,15 @@ export class VisualEngine {
         }
       }
 
+      if (this.transition) {
+        this.transition.elapsed += dt;
+        const progress = Math.min(1, this.transition.elapsed / .9);
+        this.transition.material.uniforms.uOpacity.value = 1 - progress * progress * (3 - 2 * progress);
+        this.renderer.autoClear = false;
+        this.renderer.render(this.transition.scene, this.transition.camera);
+        this.renderer.autoClear = true;
+        if (progress >= 1) this.clearTransition();
+      }
       this.animId = requestAnimationFrame(loop);
     };
 
@@ -192,6 +241,7 @@ export class VisualEngine {
 
   public dispose(): void {
     this.stop();
+    this.clearTransition();
     if (this.renderer.domElement) {
       this.renderer.domElement.removeEventListener('webglcontextlost', this.handleContextLost);
       this.renderer.domElement.removeEventListener('webglcontextrestored', this.handleContextRestored);
